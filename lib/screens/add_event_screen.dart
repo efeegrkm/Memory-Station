@@ -205,9 +205,9 @@ class _AddEventScreenState extends State<AddEventScreen> {
                 ),
                 const SizedBox(height: 20),
                 
-                _buildTextField(_titleController, "Başlık (İsteğe bağlı)", Icons.edit, isRequired: false),
+                _buildTextField(_titleController, "Başlık", Icons.edit, isRequired: false),
                 const SizedBox(height: 12),
-                _buildTextField(_locationController, "Konum (İsteğe bağlı)", Icons.location_on, isRequired: false),
+                _buildTextField(_locationController, "Konum", Icons.location_on, isRequired: false),
                 const SizedBox(height: 12),
                 
                 const Text("Kategori", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textMain)),

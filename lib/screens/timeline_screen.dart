@@ -191,7 +191,6 @@ class _TimelineScreenState extends State<TimelineScreen> {
     );
   }
 
-  // Kompakt Kart (Zoom < 0.6 veya "Başlangıç" kartı için)
   Widget _buildCompactCard(MemoryEvent event) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
@@ -218,7 +217,6 @@ class _TimelineScreenState extends State<TimelineScreen> {
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
           ),
-          // Başlangıç kartı ise ok işareti koyma
           if (event.type != 'start_point')
             const Icon(Icons.arrow_forward_ios, size: 12, color: AppColors.textLight),
         ],
@@ -238,7 +236,6 @@ class _TimelineScreenState extends State<TimelineScreen> {
     });
   }
 
-  // Tarih karşılaştırma yardımcısı
   bool isSameDay(DateTime date1, DateTime date2) {
     return date1.year == date2.year && date1.month == date2.month && date1.day == date2.day;
   }
@@ -339,7 +336,6 @@ class _TimelineScreenState extends State<TimelineScreen> {
 
                     final docs = snapshot.data!.docs;
 
-                    // Kategorileri topla
                     for (var doc in docs) {
                       final map = doc.data() as Map<String, dynamic>;
                       if (map['category'] != null) {
@@ -347,10 +343,8 @@ class _TimelineScreenState extends State<TimelineScreen> {
                       }
                     }
                     
-                    // --- ÖNEMLİ: VERİ LİSTESİNİ HAZIRLA ---
                     List<MemoryEvent> events = docs.map((doc) => MemoryEvent.fromFirestore(doc)).toList();
 
-                    // Filtreleme uygula
                     events = events.where((event) {
                       if (!_isFilterEnabled) return true;
                       bool categoryMatch = _selectedFilters.isEmpty || _selectedFilters.contains(event.category);
@@ -362,8 +356,6 @@ class _TimelineScreenState extends State<TimelineScreen> {
                       return categoryMatch && dateMatch;
                     }).toList();
 
-                    // --- MİLAT NOKTASI MANTIĞI ---
-                    // Eğer filtrelenmiş listede 7 Aralık 2024 yoksa, manuel ekle.
                     bool hasMilestone = events.any((e) => isSameDay(e.date, _milestoneDate));
                     
                     if (!hasMilestone) {
@@ -374,19 +366,24 @@ class _TimelineScreenState extends State<TimelineScreen> {
                         description: 'Bizim hikayemiz burada başladı...', 
                         date: _milestoneDate, 
                         category: 'Özel', 
-                        type: 'start_point' // Özel tip
+                        type: 'start_point'
                       ));
                     }
 
-                    // Tarihe göre sırala (Yeniden eskiye)
                     events.sort((a, b) => b.date.compareTo(a.date));
 
                     if (events.isEmpty) return const Center(child: Text("Anı bulunamadı."));
 
                     bool isCompactMode = _currentScale < 0.6;
 
+                    // HİZALAMA ÇÖZÜMÜ: Genişlik ve İkon Boyutlarını sabitleyip padding'i kaldırdık
+                    double indicatorWidth = isCompactMode ? 20.0 : 30.0 * _currentScale;
+                    double iconSize = indicatorWidth * 0.6; 
+
                     return ListView.builder(
-                      padding: EdgeInsets.fromLTRB(10, 10 * _currentScale, 20, 10 * _currentScale),
+                      // SCROLL ÇÖZÜMÜ: Alt kısma 150 boşluk (padding) verdik.
+                      // En alttaki '150' değeri, "Anı Ekle" butonunun altında kalan boşluktur.
+                      padding: const EdgeInsets.fromLTRB(10, 0, 20, 75),
                       itemCount: events.length,
                       itemBuilder: (context, index) {
                         final event = events[index];
@@ -395,23 +392,18 @@ class _TimelineScreenState extends State<TimelineScreen> {
                         IconData iconData = isMilestoneEvent ? Icons.star : Icons.favorite;
                         Color iconColor = isMilestoneEvent ? Colors.amber : AppColors.purpleHeart;
 
-                        // --- DÜZELTME BURADA ---
-                        // copyWith yerine doğrudan LineStyle oluşturuyoruz
-                        final LineStyle beforeLineStyle = index == 0 
-                          ? LineStyle(
-                              thickness: isCompactMode ? 1 : 3 * _currentScale,
-                              // Gradient yerine düz renk kullanıyoruz ama şeffaflık veriyoruz
-                              color: AppColors.timelineLine.withOpacity(0.3), 
-                            )
-                          : LineStyle(
-                              color: AppColors.timelineLine, 
-                              thickness: isCompactMode ? 1 : 3 * _currentScale
-                            );
-                        // -----------------------
+                        // GELECEK ÇİZGİSİ YOK (STANDART):
+                        // Artık herkes için aynı kalınlıkta düz çizgi. 
+                        // isFirst için timeline_tile zaten üst çizgiyi çizmez.
+                        final LineStyle defaultLineStyle = LineStyle(
+                          color: AppColors.timelineLine, 
+                          thickness: 3 * _currentScale
+                        );
 
+                        // Milat olayından sonra (aşağı doğru) çizgi olmasın
                         final LineStyle afterLineStyle = isMilestoneEvent 
                           ? const LineStyle(thickness: 0, color: Colors.transparent)
-                          : LineStyle(color: AppColors.timelineLine, thickness: isCompactMode ? 1 : 3 * _currentScale);
+                          : defaultLineStyle;
 
                         return TimelineTile(
                           alignment: TimelineAlign.manual,
@@ -419,29 +411,46 @@ class _TimelineScreenState extends State<TimelineScreen> {
                           isFirst: index == 0,
                           isLast: index == events.length - 1,
                           indicatorStyle: IndicatorStyle(
-                            width: isCompactMode ? 16 : (isMilestoneEvent ? 32 : 28) * _currentScale, 
-                            color: AppColors.background,
-                            padding: EdgeInsets.all(isCompactMode ? 2 : 4 * _currentScale),
-                            iconStyle: IconStyle(
-                              color: iconColor,
-                              iconData: iconData,
-                              fontSize: isCompactMode ? 12 : (isMilestoneEvent ? 24 : 20) * _currentScale,
+                            width: isMilestoneEvent ? indicatorWidth * 1.2 : indicatorWidth,
+                            height: isMilestoneEvent ? indicatorWidth * 1.2 : indicatorWidth,
+                            // Dairenin iç dolgu rengini buradan ayarlıyoruz
+                            color: Colors.white, 
+                            padding: EdgeInsets.zero,
+                            
+                            // Border eklemek için özel bir indicator oluşturuyoruz:
+                            indicator: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white, // Dairenin iç rengi
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: AppColors.timelineLine, // Siyah border
+                                  width: 2.3, // İnce bir kenarlık (sabit kalması daha iyi durur)
+                                ),
+                              ),
+                              child: Center(
+                                child: Icon(
+                                  iconData,
+                                  color: iconColor,
+                                  size: isMilestoneEvent ? iconSize * 1.2 : iconSize,
+                                ),
+                              ),
                             ),
                           ),
-                          beforeLineStyle: beforeLineStyle,
-                          afterLineStyle: afterLineStyle, // Bunu eklemeyi unutmuştuk, şimdi ekledik
+                          beforeLineStyle: defaultLineStyle,
+                          afterLineStyle: afterLineStyle,
                           
                           endChild: GestureDetector(
                             onTap: event.type == 'start_point' 
-                              ? null // Tıklanamaz
+                              ? null 
                               : () => showModalBottomSheet(
                                   context: context, 
                                   isScrollControlled: true, 
                                   backgroundColor: Colors.transparent, 
                                   builder: (_) => MemoryDetailView(event: event)
                                 ),
+                            // Margin eklemesi kaldırıldı, standart yapıya dönüldü
                             child: (event.type == 'start_point')
-                              ? _buildCompactCard(event) // Başlangıç her zaman kompakt
+                              ? _buildCompactCard(event) 
                               : (isCompactMode 
                                   ? _buildCompactCard(event) 
                                   : MemoryCard(event: event, scale: _currentScale)
