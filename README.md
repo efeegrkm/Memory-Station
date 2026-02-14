@@ -38,7 +38,7 @@ Bu projeyi kendi bilgisayarınızda çalıştırmak için:
 
 1.  Repoyu klonlayın:
     ```bash
-    git clone [https://github.com/KULLANICI_ADIN/memory-station.git](https://github.com/KULLANICI_ADIN/memory-station.git)
+    git clone [https://github.com/efeegrkm/memory-station.git](https://github.com/efeegrkm/memory-station.git)
     ```
 2.  Proje dizinine gidin:
     ```bash
