@@ -33,14 +33,13 @@ class _AddEventScreenState extends State<AddEventScreen> {
     final picker = ImagePicker();
     final List<XFile> pickedFiles = await picker.pickMultiImage(
       requestFullMetadata: false,
-      maxWidth: 800, // Orta kalite
+      maxWidth: 800, 
       imageQuality: 60,
     );
     
     if (pickedFiles.isNotEmpty) {
       setState(() {
         _selectedImages.addAll(pickedFiles);
-        // Maksimum 5 sınırını koruyalım
         if (_selectedImages.length > 5) {
           _selectedImages = _selectedImages.sublist(0, 5);
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("En fazla 5 fotoğraf seçilebilir.")));
@@ -49,7 +48,6 @@ class _AddEventScreenState extends State<AddEventScreen> {
     }
   }
 
-  // Yeni Kategori Ekleme Dialog'u
   void _showAddCategoryDialog() {
     TextEditingController newCatController = TextEditingController();
     showDialog(
@@ -80,7 +78,9 @@ class _AddEventScreenState extends State<AddEventScreen> {
   }
 
   void _saveEvent() async {
+    // Form validasyonu çağırıyoruz ama artık fieldlar zorunlu değil
     if (!_formKey.currentState!.validate()) return;
+    
     if (_selectedImages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("En az 1 fotoğraf seçmelisin.")));
       return;
@@ -90,15 +90,14 @@ class _AddEventScreenState extends State<AddEventScreen> {
 
     try {
       Map<String, dynamic> eventData = {
-        'title': _titleController.text,
-        'location': _locationController.text,
+        'title': _titleController.text, // Boş olabilir
+        'location': _locationController.text, // Boş olabilir
         'description': _descController.text,
         'date': _selectedDate,
         'category': _selectedCategory,
         'type': 'memory',
       };
 
-      // YENİ METODU KULLANIYORUZ
       await _dbService.addEventWithImages(eventData, _selectedImages);
 
       if (mounted) Navigator.pop(context);
@@ -188,20 +187,18 @@ class _AddEventScreenState extends State<AddEventScreen> {
                 ),
                 const SizedBox(height: 20),
                 
-                // Form Alanları...
-                _buildTextField(_titleController, "Başlık", Icons.edit),
+                // Başlık ve Konum (Zorunluluk Kalktı)
+                _buildTextField(_titleController, "Başlık (İsteğe bağlı)", Icons.edit, isRequired: false),
                 const SizedBox(height: 12),
-                _buildTextField(_locationController, "Konum", Icons.location_on),
+                _buildTextField(_locationController, "Konum (İsteğe bağlı)", Icons.location_on, isRequired: false),
                 const SizedBox(height: 12),
                 
-                // KATEGORİ (KAYDIRMALI + EKLEMELİ)
                 const Text("Kategori", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textMain)),
                 const SizedBox(height: 8),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      // Mevcut Kategoriler
                       ..._categories.map((cat) => Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: ChoiceChip(
@@ -213,7 +210,6 @@ class _AddEventScreenState extends State<AddEventScreen> {
                           },
                         ),
                       )),
-                      // Yeni Ekle Butonu
                       ActionChip(
                         avatar: const Icon(Icons.add, size: 16),
                         label: const Text("Yeni"),
@@ -224,9 +220,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
                   ),
                 ),
                 
-                // Tarih ve Açıklama...
                 const SizedBox(height: 12),
-                // (Önceki kodun aynısı - Desc ve Date picker buraya gelecek)
                  Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -297,7 +291,8 @@ class _AddEventScreenState extends State<AddEventScreen> {
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String hint, IconData icon) {
+  // isRequired parametresi eklendi
+  Widget _buildTextField(TextEditingController controller, String hint, IconData icon, {bool isRequired = true}) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -306,7 +301,8 @@ class _AddEventScreenState extends State<AddEventScreen> {
       ),
       child: TextFormField(
         controller: controller,
-        validator: (val) => val!.isEmpty ? 'Boş bırakılamaz' : null,
+        // Validator artık opsiyonel
+        validator: isRequired ? (val) => val!.isEmpty ? 'Boş bırakılamaz' : null : null,
         decoration: InputDecoration(
           hintText: hint,
           prefixIcon: Icon(icon, color: AppColors.primary),

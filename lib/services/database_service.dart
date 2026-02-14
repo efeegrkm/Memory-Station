@@ -9,37 +9,25 @@ class DatabaseService {
     return _db.collection('events').orderBy('date', descending: true).snapshots();
   }
 
-  // --- KRİTİK DEĞİŞİKLİK: FOTOĞRAFLARI AYRI KAYDETME ---
-  
-  // 1. Önce Anı Bilgisini Kaydet, Sonra Fotoğrafları Altına Ekle
-  Future<void> addEventWithImages(Map<String, dynamic> eventData, List<XFile> images) async {
-    // 1. Ana dökümanı oluştur (Henüz foto yok)
-    DocumentReference docRef = await _db.collection('events').add(eventData);
+  // --- FOTOĞRAF İŞLEMLERİ ---
 
-    // 2. Fotoğrafları bu dökümanın "album" adlı alt koleksiyonuna tek tek ekle
-    for (var image in images) {
-      String base64 = await imageToBase64(image);
-      // Her fotoğraf ayrı bir döküman oluyor (1 MB sınırı artık fotoğraf başına geçerli!)
-      await docRef.collection('album').add({
-        'data': base64,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    }
+  Future<String> imageToBase64(XFile imageFile) async {
+    final bytes = await imageFile.readAsBytes();
+    return base64Encode(bytes);
   }
 
-  // Belirli bir anının fotoğraflarını çekmek için
-  Future<List<String>> getImagesForEvent(String eventId) async {
-    QuerySnapshot snapshot = await _db
+  // Kapak fotoğrafı akışı
+  Stream<QuerySnapshot> getCoverImageStream(String eventId) {
+    return _db
         .collection('events')
         .doc(eventId)
         .collection('album')
         .orderBy('createdAt')
-        .get();
-
-    return snapshot.docs.map((doc) => doc['data'] as String).toList();
+        .limit(1)
+        .snapshots();
   }
-  
-  // İlk fotoğrafı (Kapak için) çekmek istersek hızlı bir metod
+
+  // Kapak fotosu (Future)
   Future<String?> getCoverImage(String eventId) async {
     QuerySnapshot snapshot = await _db
         .collection('events')
@@ -54,14 +42,58 @@ class DatabaseService {
     return null;
   }
 
-  // Anıyı ve altındaki fotoları silme
+  // --- GÜNCELLENMİŞ: ID ile birlikte resimleri çekme ---
+  // Artık sadece String listesi değil, {id: "...", data: "..."} şeklinde Map listesi dönüyor.
+  Future<List<Map<String, dynamic>>> getImagesWithIds(String eventId) async {
+    QuerySnapshot snapshot = await _db
+        .collection('events')
+        .doc(eventId)
+        .collection('album')
+        .orderBy('createdAt')
+        .get();
+
+    return snapshot.docs.map((doc) => {
+      'id': doc.id,
+      'data': doc['data'] as String
+    }).toList();
+  }
+
+  // --- YENİ: Anı Güncelleme ---
+  Future<void> updateEvent(String id, Map<String, dynamic> data) async {
+    await _db.collection('events').doc(id).update(data);
+  }
+
+  // --- YENİ: Tekil Fotoğraf Ekleme (Düzenleme modu için) ---
+  Future<void> addPhotoToAlbum(String eventId, XFile image) async {
+    String base64 = await imageToBase64(image);
+    await _db.collection('events').doc(eventId).collection('album').add({
+      'data': base64,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // --- YENİ: Tekil Fotoğraf Silme (Düzenleme modu için) ---
+  Future<void> deletePhotoFromAlbum(String eventId, String photoId) async {
+    await _db.collection('events').doc(eventId).collection('album').doc(photoId).delete();
+  }
+
+  // Anı Ekleme (İlk oluşturma)
+  Future<void> addEventWithImages(Map<String, dynamic> eventData, List<XFile> images) async {
+    DocumentReference docRef = await _db.collection('events').add(eventData);
+    for (var image in images) {
+      String base64 = await imageToBase64(image);
+      await docRef.collection('album').add({
+        'data': base64,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
+  }
+
   Future<void> deleteEvent(String id) async {
-    // Önce alt koleksiyondaki fotoları silmemiz lazım (Firestore otomatik silmez)
     var album = await _db.collection('events').doc(id).collection('album').get();
     for (var doc in album.docs) {
       await doc.reference.delete();
     }
-    // Sonra ana anıyı sil
     await _db.collection('events').doc(id).delete();
   }
 
@@ -69,12 +101,7 @@ class DatabaseService {
     var collection = _db.collection('events');
     var snapshots = await collection.get();
     for (var doc in snapshots.docs) {
-      await deleteEvent(doc.id); // Yukarıdaki güvenli silme metodunu kullanır
+      await deleteEvent(doc.id);
     }
-  }
-
-  Future<String> imageToBase64(XFile imageFile) async {
-    final bytes = await imageFile.readAsBytes();
-    return base64Encode(bytes);
   }
 }

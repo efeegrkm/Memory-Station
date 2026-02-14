@@ -22,14 +22,28 @@ class _TimelineScreenState extends State<TimelineScreen> {
   final DatabaseService _dbService = DatabaseService();
   
   // --- FİLTRELEME DURUMLARI ---
-  bool _isFilterEnabled = false; // Toggle
+  bool _isFilterEnabled = false; 
   List<String> _selectedFilters = []; 
   DateTimeRange? _selectedDateRange;
   
-  // Veritabanından gelen kategorileri burada tutacağız (Dinamik Liste)
-  Set<String> _dynamicCategories = {};
+  // --- TASK 2: ZOOM STATE ---
+  // 1.0 = Tam boyut (Detaylı kart)
+  // 0.4 = En küçük boyut (Kompakt görünüm)
+  // Eşik değer: 0.6 (Bunun altı kompakta geçer)
+  double _currentScale = 1.0; 
+  double _baseScale = 1.0;
 
-  // Ayarlar Dialogu (Toggle ve Buton)
+  final List<String> _defaultCategories = [
+    'Sinema', 'Piknik', 'Tiyatro', 'Gezi', 'Yürüyüş', 'Kutlama', 'Yemek', 'Diğer'
+  ];
+  Set<String> _allCategories = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _allCategories.addAll(_defaultCategories);
+  }
+
   void _showSettingsDialog() {
     showDialog(
       context: context,
@@ -41,26 +55,23 @@ class _TimelineScreenState extends State<TimelineScreen> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // 1. Filtreleme Toggle
                 SwitchListTile(
                   title: const Text("Filtreleme"),
                   subtitle: Text(_isFilterEnabled ? "Açık" : "Kapalı"),
                   value: _isFilterEnabled,
                   activeColor: AppColors.primary,
                   onChanged: (val) {
-                    setState(() => _isFilterEnabled = val); // Ana ekranı güncelle
-                    setStateInternal(() {}); // Dialog'u güncelle
+                    setState(() => _isFilterEnabled = val);
+                    setStateInternal(() {});
                   },
                 ),
-                
-                // 2. Filtre Ayarları Butonu (Toggle kapalıysa disable olur)
                 ElevatedButton.icon(
                   onPressed: _isFilterEnabled 
                     ? () {
-                        Navigator.pop(context); // Ayarları kapat
-                        _showFilterPanel();     // Paneli aç
+                        Navigator.pop(context); 
+                        _showFilterPanel();     
                       }
-                    : null, // Kapalıysa tıklanamaz
+                    : null,
                   icon: const Icon(Icons.filter_list),
                   label: const Text("Filtre Ayarlarını Yap"),
                   style: ElevatedButton.styleFrom(
@@ -69,7 +80,6 @@ class _TimelineScreenState extends State<TimelineScreen> {
                   ),
                 ),
                 const Divider(),
-                // Veritabanı Temizle
                 ListTile(
                   leading: const Icon(Icons.delete_forever, color: Colors.red),
                   title: const Text("Verileri Sıfırla", style: TextStyle(color: Colors.red)),
@@ -104,18 +114,13 @@ class _TimelineScreenState extends State<TimelineScreen> {
     );
   }
 
-  // Filtreleme Paneli (BottomSheet)
   void _showFilterPanel() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (context) => StatefulBuilder(
         builder: (context, setStatePanel) {
-          
-          // Eğer veritabanı boşsa veya henüz yüklenmediyse varsayılanları göster
-          List<String> categoriesToShow = _dynamicCategories.isEmpty 
-              ? ['Gezi', 'Sinema', 'Yemek', 'Diğer'] 
-              : _dynamicCategories.toList();
+          List<String> categoriesToShow = _allCategories.toList()..sort();
 
           return Container(
             padding: const EdgeInsets.all(24),
@@ -126,7 +131,6 @@ class _TimelineScreenState extends State<TimelineScreen> {
                 const Text("Filtreleme Seçenekleri", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 20),
                 
-                // Tarih Aralığı Seçimi
                 const Text("Tarih Aralığı", style: TextStyle(fontWeight: FontWeight.bold)),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -148,16 +152,15 @@ class _TimelineScreenState extends State<TimelineScreen> {
                       lastDate: DateTime(2050),
                     );
                     if (picked != null) {
-                      setState(() => _selectedDateRange = picked); // Ana ekranı güncelle
-                      setStatePanel((){}); // Paneli güncelle
+                      setState(() => _selectedDateRange = picked);
+                      setStatePanel((){});
                     }
                   },
                 ),
                 
                 const Divider(),
                 
-                // Kategoriler (Dinamik Liste)
-                const Text("Kategoriler (Mevcut Anılardan)", style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text("Kategoriler", style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
@@ -188,6 +191,39 @@ class _TimelineScreenState extends State<TimelineScreen> {
     );
   }
 
+  // --- COMPACT VIEW WIDGET (TASK 2) ---
+  Widget _buildCompactCard(MemoryEvent event) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            DateFormat('dd.MM.yyyy').format(event.date),
+            style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryDark),
+          ),
+          const SizedBox(width: 12),
+          Container(height: 15, width: 2, color: AppColors.textLight),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              event.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+          const Icon(Icons.arrow_forward_ios, size: 12, color: AppColors.textLight),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -202,17 +238,16 @@ class _TimelineScreenState extends State<TimelineScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text("Memory Station", style: GoogleFonts.pacifico(fontSize: 28, color: AppColors.primaryDark)),
+                    Text("Memory Station", style: GoogleFonts.pacifico(fontSize: 28, color: AppColors.purpleHeart)),
                     IconButton(
                       onPressed: _showSettingsDialog,
-                      icon: const Icon(Icons.favorite, color: AppColors.primary, size: 30),
+                      icon: const Icon(Icons.settings, color: AppColors.textMain, size: 28),
                     ),
                   ],
                 ),
               ),
             ),
             
-            // Eğer Filtreleme Açıksa Bilgi Çubuğu Göster
             if (_isFilterEnabled)
               Container(
                 width: double.infinity,
@@ -227,69 +262,100 @@ class _TimelineScreenState extends State<TimelineScreen> {
               ),
 
             Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: _dbService.getEvents(),
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) return const Center(child: Text("Hata oluştu"));
-                  if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-
-                  final docs = snapshot.data!.docs;
-
-                  // --- KATEGORİLERİ DİNAMİK OLARAK TOPLA ---
-                  // Gelen tüm dökümanların kategorilerini bir havuza atıyoruz
-                  Set<String> loadedCategories = {};
-                  for (var doc in docs) {
-                    final map = doc.data() as Map<String, dynamic>;
-                    if (map['category'] != null) {
-                      loadedCategories.add(map['category']);
-                    }
-                  }
-                  // Bunu global değişkene atayalım ki filtre panelinde gözüksün
-                  _dynamicCategories = loadedCategories;
-                  
-                  // --- FİLTRELEME MANTIĞI ---
-                  final data = docs.where((doc) {
-                    if (!_isFilterEnabled) return true; // Filtre kapalıysa hepsini göster
-                    
-                    final map = doc.data() as Map<String, dynamic>;
-                    final category = map['category'] ?? 'Diğer';
-                    final date = (map['date'] as Timestamp).toDate();
-
-                    // 1. Kategori Kontrolü
-                    bool categoryMatch = _selectedFilters.isEmpty || _selectedFilters.contains(category);
-                    
-                    // 2. Tarih Kontrolü
-                    bool dateMatch = true;
-                    if (_selectedDateRange != null) {
-                      dateMatch = date.isAfter(_selectedDateRange!.start.subtract(const Duration(days: 1))) && 
-                                  date.isBefore(_selectedDateRange!.end.add(const Duration(days: 1)));
-                    }
-
-                    return categoryMatch && dateMatch;
-                  }).toList();
-
-                  if (data.isEmpty) return const Center(child: Text("Filtrelere uygun anı bulunamadı."));
-
-                  return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    itemCount: data.length,
-                    itemBuilder: (context, index) {
-                      final event = MemoryEvent.fromFirestore(data[index]);
-                      return TimelineTile(
-                        alignment: TimelineAlign.manual,
-                        lineXY: 0.15,
-                        isFirst: index == 0,
-                        isLast: index == data.length - 1,
-                        indicatorStyle: IndicatorStyle(width: 28, color: AppColors.background, padding: const EdgeInsets.all(4), iconStyle: IconStyle(color: AppColors.primary, iconData: Icons.favorite)),
-                        beforeLineStyle: const LineStyle(color: AppColors.timelineLine, thickness: 3),
-                        endChild: GestureDetector(
-                          onTap: () => showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => MemoryDetailView(event: event)),
-                          child: MemoryCard(event: event),
-                        ),
-                      );
-                    },
-                  );
+              // TASK 2: GESTURE DETECTOR ILE ZOOM (SCALE) ALGILAMA
+              child: GestureDetector(
+                onScaleStart: (details) {
+                  _baseScale = _currentScale;
                 },
+                onScaleUpdate: (details) {
+                  setState(() {
+                    // Zoom seviyesini 0.4 ile 1.0 arasında tutuyoruz
+                    _currentScale = (_baseScale * details.scale).clamp(0.4, 1.0);
+                  });
+                },
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: _dbService.getEvents(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) return const Center(child: Text("Hata oluştu"));
+                    if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+
+                    final docs = snapshot.data!.docs;
+
+                    for (var doc in docs) {
+                      final map = doc.data() as Map<String, dynamic>;
+                      if (map['category'] != null) {
+                        _allCategories.add(map['category']);
+                      }
+                    }
+                    
+                    final data = docs.where((doc) {
+                      if (!_isFilterEnabled) return true;
+                      final map = doc.data() as Map<String, dynamic>;
+                      final category = map['category'] ?? 'Diğer';
+                      final date = (map['date'] as Timestamp).toDate();
+                      bool categoryMatch = _selectedFilters.isEmpty || _selectedFilters.contains(category);
+                      bool dateMatch = true;
+                      if (_selectedDateRange != null) {
+                        dateMatch = date.isAfter(_selectedDateRange!.start.subtract(const Duration(days: 1))) && 
+                                    date.isBefore(_selectedDateRange!.end.add(const Duration(days: 1)));
+                      }
+                      return categoryMatch && dateMatch;
+                    }).toList();
+
+                    if (data.isEmpty) return const Center(child: Text("Anı bulunamadı."));
+
+                    // Zoom durumuna göre görünüm değişimi
+                    bool isCompact = _currentScale < 0.6;
+
+                    return ListView.builder(
+                      // Zoom yaptıkça liste paddingini de ayarlayalım ki ferahlasın veya sıkışsın
+                      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10 * _currentScale),
+                      itemCount: data.length,
+                      itemBuilder: (context, index) {
+                        final event = MemoryEvent.fromFirestore(data[index]);
+                        
+                        return TimelineTile(
+                          alignment: TimelineAlign.manual,
+                          lineXY: 0.15,
+                          isFirst: index == 0,
+                          isLast: index == data.length - 1,
+                          indicatorStyle: IndicatorStyle(
+                            // TASK 2: Kalpler birbirine yaklaşacak
+                            // Zoom azaldıkça width ve padding küçülür
+                            width: isCompact ? 16 : 28 * _currentScale, 
+                            color: AppColors.background,
+                            padding: EdgeInsets.all(isCompact ? 2 : 4 * _currentScale),
+                            iconStyle: IconStyle(
+                              color: AppColors.purpleHeart,
+                              iconData: Icons.favorite,
+                              // Zoom out yapınca ikon da küçülsün
+                              fontSize: isCompact ? 12 : 20 * _currentScale,
+                            ),
+                          ),
+                          // Çizgi kalınlığı da incelsin
+                          beforeLineStyle: LineStyle(color: AppColors.timelineLine, thickness: isCompact ? 1 : 3 * _currentScale),
+                          
+                          endChild: GestureDetector(
+                            onTap: () => showModalBottomSheet(
+                              context: context, 
+                              isScrollControlled: true, 
+                              backgroundColor: Colors.transparent, 
+                              builder: (_) => MemoryDetailView(event: event)
+                            ),
+                            // TASK 2: Zoom level'a göre Widget değişimi
+                            child: isCompact 
+                              ? _buildCompactCard(event) // 0.6'nın altındaysa Kompakt
+                              : Transform.scale(
+                                  // 0.6 üzerindeyse normal kart ama biraz scale etkisi verelim
+                                  scale: _currentScale < 0.8 ? 0.95 : 1.0, 
+                                  child: MemoryCard(event: event)
+                                ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
               ),
             ),
           ],

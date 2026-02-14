@@ -2,21 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
-  static const Color background = Color(0xFFFDFBF7);
+  // Yeni Turkuaz & Yeşil & Pastel Tonlar
+  static const Color background = Color(0xFFF0F7F4); // Çok açık nane yeşili
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color primary = Color(0xFFFF9A9E);
-  static const Color primaryDark = Color(0xFFE87C82);
-  static const Color accent = Color(0xFFFECFEF);
-  static const Color textMain = Color(0xFF5D4037);
-  static const Color textLight = Color(0xFFA1887F);
-  static const Color timelineLine = Color(0xFFFFD1D1);
   
-  // Yeni Gradyan Renkleri
-  static const Color gradientStart = Color(0xFFFAE3E3); // Hafif kırmızımsı
-  static const Color gradientEnd = Color(0xFFFFFDF5);   // Krem
+  static const Color primary = Color(0xFF26A69A); // Turkuaz
+  static const Color primaryDark = Color(0xFF00796B); // Koyu Turkuaz
+  static const Color accent = Color(0xFFA5D6A7); // Pastel Yeşil
+  
+  static const Color textMain = Color(0xFF263238); // Koyu Gri/Mavi
+  static const Color textLight = Color(0xFF78909C);
+  
+  static const Color timelineLine = Color(0xFF80CBC4); // Çizgi rengi
+  static const Color purpleHeart = Color(0xFF9C27B0); // Timeline'daki Mor Kalp
 }
 
 class AppTheme {
+  // DÜZELTME: Gradyan tanımı buraya, AppTheme sınıfının içine taşındı.
+  static const BoxDecoration mainGradientDecoration = BoxDecoration(
+    gradient: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        Color(0xFFE0F2F1), // Açık Turkuaz
+        Color(0xFFE8F5E9), // Açık Yeşil
+      ],
+    ),
+  );
+
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
@@ -25,6 +38,8 @@ class AppTheme {
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
         surface: AppColors.surface,
+        primary: AppColors.primary,
+        secondary: AppColors.accent,
       ),
       textTheme: GoogleFonts.quicksandTextTheme().apply(
         bodyColor: AppColors.textMain,
@@ -34,8 +49,8 @@ class AppTheme {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
+        iconTheme: IconThemeData(color: AppColors.textMain),
       ),
-      // Input dekorasyonları için varsayılan tema
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
@@ -55,31 +70,18 @@ class AppTheme {
     );
   }
 
-  // Yeni: Hafif kırmızı ışık saçan gölge
   static List<BoxShadow> glowShadow = [
     BoxShadow(
-      color: AppColors.primary.withOpacity(0.25), // Kırmızımsı parlama
-      offset: const Offset(5, 5),
-      blurRadius: 20,
-      spreadRadius: 2,
-    ),
-    BoxShadow(
-      color: Colors.white.withOpacity(0.8),
-      offset: const Offset(-5, -5),
+      color: AppColors.primary.withOpacity(0.15),
+      offset: const Offset(4, 4),
       blurRadius: 15,
       spreadRadius: 1,
     ),
-  ];
-  
-  // Arka plan gradyanı
-  static BoxDecoration mainGradientDecoration = const BoxDecoration(
-    gradient: LinearGradient(
-      begin: Alignment.topRight,
-      end: Alignment.bottomLeft,
-      colors: [
-        Color(0xFFFFE5E5), // Sağ üst (Kırmızımsı)
-        Color(0xFFFFFBF0), // Sol alt (Krem)
-      ],
+    BoxShadow(
+      color: Colors.white.withOpacity(0.8),
+      offset: const Offset(-4, -4),
+      blurRadius: 10,
+      spreadRadius: 1,
     ),
-  );
+  ];
 }
