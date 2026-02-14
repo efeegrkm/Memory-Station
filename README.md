@@ -1,16 +1,56 @@
-# memory_station
+# Memory Station
 
-A new Flutter project.
+**Memory Station**, çiftlerin en güzel anılarını dijital bir zaman çizelgesinde saklamasını sağlayan, Flutter ile geliştirilmiş özel bir mobil uygulamadır.
 
-## Getting Started
+Bu proje, anıları fotoğraflar, konum bilgileri ve özel notlarla ölümsüzleştirir.
 
-This project is a starting point for a Flutter application.
+## Özellikler
 
-A few resources to get you started if this is your first Flutter project:
+* ** Zaman Çizelgesi (Timeline):** Tüm anılarınızı tarih sırasına göre şık bir akışta görüntüleyin.
+* ** Çoklu Fotoğraf Desteği:** Her anıya 5 adede kadar fotoğraf ekleyin.
+* ** Dinamik Kategoriler:** Anılarınızı (Sinema, Gezi, Yemek vb.) kategorilere ayırın ve yeni kategoriler oluşturun.
+* ** Gelişmiş Filtreleme:** Tarih aralığına ve kategorilere göre anılarınızı filtreleyin.
+* ** Özel Tasarım:** Yumuşak gradyanlar, özel fontlar ve "Soft UI" gölgelendirmelerle modern bir arayüz.
+* ** Bulut Tabanlı:** Veriler Firebase Firestore üzerinde güvenle saklanır (Fotoğraflar Base64 formatında optimize edilerek tutulur).
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Kullanılan Teknolojiler
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+* **[Flutter](https://flutter.dev/):** UI Geliştirme Kiti
+* **[Firebase Firestore](https://firebase.google.com/docs/firestore):** NoSQL Veritabanı
+* **Dart:** Programlama Dili
+
+### Kütüphaneler
+* `timeline_tile`: Zaman çizelgesi görünümü için.
+* `image_picker`: Galeriden fotoğraf seçimi için.
+* `google_fonts`: Özel yazı tipleri için.
+* `intl`: Tarih formatlama için.
+* `audioplayers`
+
+## Ekran Görüntüleri
+
+| Timeline | Anı Ekle | Detay Görünümü |
+|:---:|:---:|:---:|
+| *(Buraya Timeline ekran görüntüsü)* | *(Buraya Ekleme ekranı görseli)* | *(Buraya Detay görseli)* |
+
+## Kurulum
+
+Bu projeyi kendi bilgisayarınızda çalıştırmak için:
+
+1.  Repoyu klonlayın:
+    ```bash
+    git clone [[https://github.com/efeegrkm/memory-station.git](https://github.com/efeegrkm/memory-station.git)](https://github.com/efeegrkm/Memory-Station.git)
+    ```
+2.  Proje dizinine gidin:
+    ```bash
+    cd memory-station
+    ```
+3.  Paketleri yükleyin:
+    ```bash
+    flutter pub get
+    ```
+4.  Firebase ayarlarını yapılandırın (kendi `google-services.json` dosyanızı ekleyin).
+5.  Uygulamayı başlatın:
+    ```bash
+    flutter run
+    ```
+---
