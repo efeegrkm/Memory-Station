@@ -3,9 +3,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart'; // YENİ
 import '../models/memory_event.dart';
 import '../theme/app_theme.dart';
 import '../services/database_service.dart';
+import '../screens/map_picker_screen.dart'; // YENİ
 
 class MemoryDetailView extends StatefulWidget {
   final MemoryEvent event;
@@ -29,7 +31,6 @@ class _MemoryDetailViewState extends State<MemoryDetailView> {
   late DateTime _selectedDate;
   late String _selectedCategory;
 
-  // Varsayılan + Dinamik olacak
   final List<String> _categories = ['Sinema', 'Piknik', 'Tiyatro', 'Gezi', 'Yürüyüş', 'Kutlama', 'Yemek', 'Diğer'];
 
   List<Map<String, dynamic>> _images = [];
@@ -45,19 +46,6 @@ class _MemoryDetailViewState extends State<MemoryDetailView> {
     _selectedCategory = widget.event.category;
     
     _loadImages();
-    _loadAllCategories();
-  }
-
-  // Kategorileri yükle
-  Future<void> _loadAllCategories() async {
-    final dynamicCategories = await _dbService.getAllCategories();
-    setState(() {
-      for (var cat in dynamicCategories) {
-        if (!_categories.contains(cat)) {
-          _categories.add(cat);
-        }
-      }
-    });
   }
 
   void _loadImages() async {
@@ -285,6 +273,7 @@ class _MemoryDetailViewState extends State<MemoryDetailView> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // BAŞLIK
                         Row(
                           children: [
                             Expanded(
@@ -310,6 +299,7 @@ class _MemoryDetailViewState extends State<MemoryDetailView> {
                         
                         const SizedBox(height: 12),
                         
+                        // TARİH ve KATEGORİ
                         Row(
                           children: [
                             InkWell(
@@ -355,6 +345,7 @@ class _MemoryDetailViewState extends State<MemoryDetailView> {
 
                         const SizedBox(height: 12),
 
+                        // KONUM
                         Row(
                           children: [
                             const Icon(Icons.location_on, size: 16, color: Colors.grey),
@@ -364,6 +355,31 @@ class _MemoryDetailViewState extends State<MemoryDetailView> {
                               : Expanded(child: Text(_locationController.text, style: const TextStyle(fontSize: 16, color: Colors.grey))),
                           ],
                         ),
+                        
+                        // --- YENİ: HARİTADA GÖSTER BUTONU ---
+                        if (widget.event.latitude != null && widget.event.longitude != null && !_isEditing)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12.0),
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => MapPickerScreen(
+                                      initialLocation: LatLng(widget.event.latitude!, widget.event.longitude!),
+                                      isReadOnly: true,
+                                    ),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.map, color: AppColors.primary),
+                              label: const Text("Haritada Göster", style: TextStyle(color: AppColors.primary)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: AppColors.primary),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
                         
                         const SizedBox(height: 20),
                         const Text("Not:", style: TextStyle(fontWeight: FontWeight.bold)),

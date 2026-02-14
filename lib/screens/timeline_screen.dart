@@ -4,6 +4,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:timeline_tile/timeline_tile.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+// YENİ IMPORTLAR
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+
 import '../theme/app_theme.dart';
 import '../models/memory_event.dart';
 import '../widgets/memory_card.dart';
@@ -29,13 +33,17 @@ class _TimelineScreenState extends State<TimelineScreen> {
   double _currentScale = 1.0; 
   double _baseScale = 1.0;
   bool _showZoomControls = false;
+  
+  // YENİ: Harita Modu Switch
+  bool _isMapView = false;
+
+  final int _futureDotCount = 3; 
 
   final List<String> _defaultCategories = [
     'Sinema', 'Piknik', 'Tiyatro', 'Gezi', 'Yürüyüş', 'Kutlama', 'Yemek', 'Diğer'
   ];
   Set<String> _allCategories = {};
 
-  // MİLAT TARİHİ: 7 ARALIK 2024
   final DateTime _milestoneDate = DateTime(2024, 12, 7);
 
   @override
@@ -240,6 +248,67 @@ class _TimelineScreenState extends State<TimelineScreen> {
     return date1.year == date2.year && date1.month == date2.month && date1.day == date2.day;
   }
 
+  // --- HARİTA GÖRÜNÜMÜ WIDGET'I ---
+  Widget _buildMapView(List<MemoryEvent> events) {
+    // Sadece koordinatı olanları filtrele
+    final mapEvents = events.where((e) => e.latitude != null && e.longitude != null).toList();
+
+    if (mapEvents.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.map_outlined, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text("Haritada gösterilecek anı bulunamadı.", style: TextStyle(color: AppColors.textMain)),
+          ],
+        ),
+      );
+    }
+
+    return FlutterMap(
+      options: MapOptions(
+        // İlk açılışta ilk anıya odaklan
+        initialCenter: LatLng(mapEvents.first.latitude!, mapEvents.first.longitude!),
+        initialZoom: 12.0,
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.memorystation.app',
+        ),
+        MarkerLayer(
+          markers: mapEvents.map((event) {
+            return Marker(
+              point: LatLng(event.latitude!, event.longitude!),
+              width: 50,
+              height: 50,
+              child: GestureDetector(
+                onTap: () {
+                  showModalBottomSheet(
+                    context: context, 
+                    isScrollControlled: true, 
+                    backgroundColor: Colors.transparent, 
+                    builder: (_) => MemoryDetailView(event: event)
+                  );
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.primary, width: 2),
+                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                  ),
+                  child: const Icon(Icons.favorite, color: AppColors.purpleHeart, size: 24),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -257,7 +326,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
                       child: Text("Memory Station", style: GoogleFonts.pacifico(fontSize: 28, color: AppColors.purpleHeart)),
                     ),
                     
-                    if (_showZoomControls)
+                    if (_showZoomControls && !_isMapView)
                       Container(
                         margin: const EdgeInsets.only(right: 8),
                         decoration: BoxDecoration(
@@ -283,18 +352,19 @@ class _TimelineScreenState extends State<TimelineScreen> {
                         ),
                       ),
                     
-                    IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _showZoomControls = !_showZoomControls;
-                        });
-                      },
-                      icon: Icon(
-                        _showZoomControls ? Icons.search_off : Icons.search,
-                        color: AppColors.textMain, 
-                        size: 28
+                    if (!_isMapView)
+                      IconButton(
+                        onPressed: () {
+                          setState(() {
+                            _showZoomControls = !_showZoomControls;
+                          });
+                        },
+                        icon: Icon(
+                          _showZoomControls ? Icons.search_off : Icons.search,
+                          color: AppColors.textMain, 
+                          size: 28
+                        ),
                       ),
-                    ),
                     
                     IconButton(
                       onPressed: _showSettingsDialog,
@@ -319,71 +389,74 @@ class _TimelineScreenState extends State<TimelineScreen> {
               ),
 
             Expanded(
-              child: GestureDetector(
-                onScaleStart: (details) {
-                  _baseScale = _currentScale;
-                },
-                onScaleUpdate: (details) {
-                  setState(() {
-                    _currentScale = (_baseScale * details.scale).clamp(0.4, 1.0);
-                  });
-                },
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: _dbService.getEvents(),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) return const Center(child: Text("Hata oluştu"));
-                    if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+              child: StreamBuilder<QuerySnapshot>(
+                stream: _dbService.getEvents(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) return const Center(child: Text("Hata oluştu"));
+                  if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
 
-                    final docs = snapshot.data!.docs;
+                  final docs = snapshot.data!.docs;
 
-                    for (var doc in docs) {
-                      final map = doc.data() as Map<String, dynamic>;
-                      if (map['category'] != null) {
-                        _allCategories.add(map['category']);
-                      }
+                  for (var doc in docs) {
+                    final map = doc.data() as Map<String, dynamic>;
+                    if (map['category'] != null) {
+                      _allCategories.add(map['category']);
                     }
-                    
-                    List<MemoryEvent> events = docs.map((doc) => MemoryEvent.fromFirestore(doc)).toList();
+                  }
+                  
+                  List<MemoryEvent> events = docs.map((doc) => MemoryEvent.fromFirestore(doc)).toList();
 
-                    events = events.where((event) {
-                      if (!_isFilterEnabled) return true;
-                      bool categoryMatch = _selectedFilters.isEmpty || _selectedFilters.contains(event.category);
-                      bool dateMatch = true;
-                      if (_selectedDateRange != null) {
-                        dateMatch = event.date.isAfter(_selectedDateRange!.start.subtract(const Duration(days: 1))) && 
-                                    event.date.isBefore(_selectedDateRange!.end.add(const Duration(days: 1)));
-                      }
-                      return categoryMatch && dateMatch;
-                    }).toList();
-
-                    bool hasMilestone = events.any((e) => isSameDay(e.date, _milestoneDate));
-                    
-                    if (!hasMilestone) {
-                      events.add(MemoryEvent(
-                        id: 'milestone_fixed', 
-                        title: 'Başlangıç', 
-                        location: '', 
-                        description: 'Bizim hikayemiz burada başladı...', 
-                        date: _milestoneDate, 
-                        category: 'Özel', 
-                        type: 'start_point'
-                      ));
+                  events = events.where((event) {
+                    if (!_isFilterEnabled) return true;
+                    bool categoryMatch = _selectedFilters.isEmpty || _selectedFilters.contains(event.category);
+                    bool dateMatch = true;
+                    if (_selectedDateRange != null) {
+                      dateMatch = event.date.isAfter(_selectedDateRange!.start.subtract(const Duration(days: 1))) && 
+                                  event.date.isBefore(_selectedDateRange!.end.add(const Duration(days: 1)));
                     }
+                    return categoryMatch && dateMatch;
+                  }).toList();
 
-                    events.sort((a, b) => b.date.compareTo(a.date));
+                  // HARİTA GÖRÜNÜMÜ KONTROLÜ
+                  if (_isMapView) {
+                    return _buildMapView(events);
+                  }
 
-                    if (events.isEmpty) return const Center(child: Text("Anı bulunamadı."));
+                  // -- LİSTE GÖRÜNÜMÜ MANTIĞI --
+                  bool hasMilestone = events.any((e) => isSameDay(e.date, _milestoneDate));
+                  
+                  if (!hasMilestone) {
+                    events.add(MemoryEvent(
+                      id: 'milestone_fixed', 
+                      title: 'Başlangıç', 
+                      location: '', 
+                      description: 'Bizim hikayemiz burada başladı...', 
+                      date: _milestoneDate, 
+                      category: 'Özel', 
+                      type: 'start_point'
+                    ));
+                  }
 
-                    bool isCompactMode = _currentScale < 0.6;
+                  events.sort((a, b) => b.date.compareTo(a.date));
 
-                    // HİZALAMA ÇÖZÜMÜ: Genişlik ve İkon Boyutlarını sabitleyip padding'i kaldırdık
-                    double indicatorWidth = isCompactMode ? 20.0 : 30.0 * _currentScale;
-                    double iconSize = indicatorWidth * 0.6; 
+                  if (events.isEmpty) return const Center(child: Text("Anı bulunamadı."));
 
-                    return ListView.builder(
-                      // SCROLL ÇÖZÜMÜ: Alt kısma 150 boşluk (padding) verdik.
-                      // En alttaki '150' değeri, "Anı Ekle" butonunun altında kalan boşluktur.
-                      padding: const EdgeInsets.fromLTRB(10, 0, 20, 75),
+                  bool isCompactMode = _currentScale < 0.6;
+
+                  double indicatorWidth = isCompactMode ? 20.0 : 30.0 * _currentScale;
+                  double iconSize = indicatorWidth * 0.6; 
+
+                  return GestureDetector(
+                    onScaleStart: (details) {
+                      _baseScale = _currentScale;
+                    },
+                    onScaleUpdate: (details) {
+                      setState(() {
+                        _currentScale = (_baseScale * details.scale).clamp(0.4, 1.0);
+                      });
+                    },
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(10, 20, 20, 120),
                       itemCount: events.length,
                       itemBuilder: (context, index) {
                         final event = events[index];
@@ -392,15 +465,11 @@ class _TimelineScreenState extends State<TimelineScreen> {
                         IconData iconData = isMilestoneEvent ? Icons.star : Icons.favorite;
                         Color iconColor = isMilestoneEvent ? Colors.amber : AppColors.purpleHeart;
 
-                        // GELECEK ÇİZGİSİ YOK (STANDART):
-                        // Artık herkes için aynı kalınlıkta düz çizgi. 
-                        // isFirst için timeline_tile zaten üst çizgiyi çizmez.
                         final LineStyle defaultLineStyle = LineStyle(
                           color: AppColors.timelineLine, 
                           thickness: 3 * _currentScale
                         );
 
-                        // Milat olayından sonra (aşağı doğru) çizgi olmasın
                         final LineStyle afterLineStyle = isMilestoneEvent 
                           ? const LineStyle(thickness: 0, color: Colors.transparent)
                           : defaultLineStyle;
@@ -411,28 +480,48 @@ class _TimelineScreenState extends State<TimelineScreen> {
                           isFirst: index == 0,
                           isLast: index == events.length - 1,
                           indicatorStyle: IndicatorStyle(
-                            width: isMilestoneEvent ? indicatorWidth * 1.2 : indicatorWidth,
+                            width: isMilestoneEvent ? indicatorWidth * 1.2 : indicatorWidth, 
                             height: isMilestoneEvent ? indicatorWidth * 1.2 : indicatorWidth,
-                            // Dairenin iç dolgu rengini buradan ayarlıyoruz
                             color: Colors.white, 
                             padding: EdgeInsets.zero,
                             
-                            // Border eklemek için özel bir indicator oluşturuyoruz:
                             indicator: Container(
                               decoration: BoxDecoration(
-                                color: Colors.white, // Dairenin iç rengi
+                                color: Colors.white,
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: AppColors.timelineLine, // Siyah border
-                                  width: 2.3, // İnce bir kenarlık (sabit kalması daha iyi durur)
+                                  color: AppColors.timelineLine, 
+                                  width: 2.3, 
                                 ),
                               ),
-                              child: Center(
-                                child: Icon(
-                                  iconData,
-                                  color: iconColor,
-                                  size: isMilestoneEvent ? iconSize * 1.2 : iconSize,
-                                ),
+                              child: Stack(
+                                alignment: Alignment.center,
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Icon(
+                                    iconData,
+                                    color: iconColor,
+                                    size: isMilestoneEvent ? iconSize * 1.2 : iconSize,
+                                  ),
+                                  if (index == 0)
+                                    Positioned(
+                                      top: -(_futureDotCount * 6.0) * _currentScale, 
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: List.generate(_futureDotCount, (dotIndex) {
+                                          return Container(
+                                            width: 3 * _currentScale,
+                                            height: 3 * _currentScale,
+                                            margin: EdgeInsets.symmetric(vertical: 2 * _currentScale),
+                                            decoration: const BoxDecoration(
+                                              color: AppColors.timelineLine,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          );
+                                        }),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ),
@@ -448,7 +537,6 @@ class _TimelineScreenState extends State<TimelineScreen> {
                                   backgroundColor: Colors.transparent, 
                                   builder: (_) => MemoryDetailView(event: event)
                                 ),
-                            // Margin eklemesi kaldırıldı, standart yapıya dönüldü
                             child: (event.type == 'start_point')
                               ? _buildCompactCard(event) 
                               : (isCompactMode 
@@ -458,19 +546,42 @@ class _TimelineScreenState extends State<TimelineScreen> {
                           ),
                         );
                       },
-                    );
-                  },
-                ),
+                    ),
+                  );
+                },
               ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddEventScreen())),
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.add_a_photo, color: Colors.white),
-        label: const Text("Anı Ekle", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      floatingActionButton: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          // Sol Alt: Haritaya Git Butonu
+          Padding(
+            padding: const EdgeInsets.only(left: 30), // Scaffold boşluğu
+            child: FloatingActionButton(
+              heroTag: "mapToggle",
+              onPressed: () {
+                setState(() {
+                  _isMapView = !_isMapView;
+                });
+              },
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.primary,
+              child: Icon(_isMapView ? Icons.list : Icons.map),
+            ),
+          ),
+          const Spacer(),
+          // Sağ Alt: Anı Ekle Butonu
+          FloatingActionButton.extended(
+            heroTag: "addEvent",
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddEventScreen())),
+            backgroundColor: AppColors.primary,
+            icon: const Icon(Icons.add_a_photo, color: Colors.white),
+            label: const Text("Anı Ekle", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }

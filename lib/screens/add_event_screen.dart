@@ -3,9 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart'; // YENİ
 import '../theme/app_theme.dart';
 import '../services/database_service.dart';
-// permission_handler kaldırıldı
+import 'map_picker_screen.dart'; // YENİ
 
 class AddEventScreen extends StatefulWidget {
   const AddEventScreen({super.key});
@@ -23,6 +24,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
   DateTime _selectedDate = DateTime.now();
   List<XFile> _selectedImages = [];
   bool _isLoading = false;
+  LatLng? _selectedLocation; // YENİ: Koordinat değişkeni
   
   // Varsayılan Kategoriler
   final List<String> _categories = ['Sinema', 'Piknik', 'Tiyatro', 'Gezi', 'Yürüyüş', 'Kutlama', 'Yemek'];
@@ -36,7 +38,6 @@ class _AddEventScreenState extends State<AddEventScreen> {
     _loadAllCategories();
   }
 
-  // Dinamik kategorileri yükle
   Future<void> _loadAllCategories() async {
     final dynamicCategories = await _dbService.getAllCategories();
     setState(() {
@@ -48,7 +49,6 @@ class _AddEventScreenState extends State<AddEventScreen> {
     });
   }
 
-  // İzin kodu kaldırıldı, eski sade haline döndü
   Future<void> _pickImages() async {
     final picker = ImagePicker();
     final List<XFile> pickedFiles = await picker.pickMultiImage(
@@ -115,6 +115,9 @@ class _AddEventScreenState extends State<AddEventScreen> {
         'date': _selectedDate,
         'category': _selectedCategory,
         'type': 'memory',
+        // YENİ: Koordinatları ekle
+        'latitude': _selectedLocation?.latitude,
+        'longitude': _selectedLocation?.longitude,
       };
 
       await _dbService.addEventWithImages(eventData, _selectedImages);
@@ -150,6 +153,7 @@ class _AddEventScreenState extends State<AddEventScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // FOTOĞRAF ALANI
                 SizedBox(
                   height: 120,
                   child: ListView.builder(
@@ -207,7 +211,61 @@ class _AddEventScreenState extends State<AddEventScreen> {
                 
                 _buildTextField(_titleController, "Başlık", Icons.edit, isRequired: false),
                 const SizedBox(height: 12),
-                _buildTextField(_locationController, "Konum", Icons.location_on, isRequired: false),
+                _buildTextField(_locationController, "Konum Adı", Icons.location_on, isRequired: false),
+                const SizedBox(height: 12),
+
+                // --- YENİ: HARİTADAN SEÇ BUTONU ---
+                InkWell(
+                  onTap: () async {
+                    final LatLng? result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (ctx) => MapPickerScreen(initialLocation: _selectedLocation),
+                      ),
+                    );
+                    
+                    if (result != null) {
+                      setState(() {
+                        _selectedLocation = result;
+                      });
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10)],
+                      border: _selectedLocation != null ? Border.all(color: AppColors.primary, width: 1.5) : null,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _selectedLocation != null ? Icons.map : Icons.add_location_alt, 
+                          color: _selectedLocation != null ? AppColors.primary : Colors.grey
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _selectedLocation != null 
+                              ? "Konum İşaretlendi"
+                              : "Haritada Konum İşaretle (İsteğe Bağlı)",
+                            style: TextStyle(
+                              fontSize: 16, 
+                              color: _selectedLocation != null ? AppColors.primary : Colors.grey[600],
+                              fontWeight: _selectedLocation != null ? FontWeight.bold : FontWeight.normal
+                            ),
+                          ),
+                        ),
+                        if (_selectedLocation != null)
+                          GestureDetector(
+                            onTap: () => setState(() => _selectedLocation = null),
+                            child: const Icon(Icons.close, color: Colors.red),
+                          )
+                      ],
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 12),
                 
                 const Text("Kategori", style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textMain)),
@@ -261,7 +319,6 @@ class _AddEventScreenState extends State<AddEventScreen> {
                     final DateTime? picked = await showDatePicker(
                       context: context,
                       initialDate: _selectedDate.isBefore(DateTime(2024, 12, 7)) ? DateTime(2024, 12, 7) : _selectedDate,
-                      // BAŞLANGIÇ TARİHİ KISITLAMASI: 7 Aralık 2024
                       firstDate: DateTime(2024, 12, 7),
                       lastDate: DateTime(2050),
                     );

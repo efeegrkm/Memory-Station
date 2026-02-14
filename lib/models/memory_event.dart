@@ -8,8 +8,9 @@ class MemoryEvent {
   final DateTime date;
   final String category;
   final String type;
-  // Artık tüm listeyi burada tutmuyoruz, kapak fotosunu tutabiliriz veya boş geçebiliriz.
-  // Fotoğrafları ayrı çekeceğiz.
+  // --- YENİ ALANLAR ---
+  final double? latitude;
+  final double? longitude;
 
   MemoryEvent({
     required this.id,
@@ -19,6 +20,8 @@ class MemoryEvent {
     required this.date,
     required this.category,
     required this.type,
+    this.latitude,
+    this.longitude,
   });
 
   factory MemoryEvent.fromFirestore(DocumentSnapshot doc) {
@@ -31,6 +34,9 @@ class MemoryEvent {
       date: (data['date'] as Timestamp).toDate(),
       category: data['category'] ?? 'Diğer',
       type: data['type'] ?? 'memory',
+      // Veritabanında varsa al, yoksa null
+      latitude: data['latitude']?.toDouble(),
+      longitude: data['longitude']?.toDouble(),
     );
   }
 
@@ -42,6 +48,9 @@ class MemoryEvent {
       'date': Timestamp.fromDate(date),
       'category': category,
       'type': type,
+      // Harita verilerini kaydet
+      'latitude': latitude,
+      'longitude': longitude,
     };
   }
 }
