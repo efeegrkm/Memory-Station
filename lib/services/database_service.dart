@@ -9,6 +9,19 @@ class DatabaseService {
     return _db.collection('events').orderBy('date', descending: true).snapshots();
   }
 
+  // --- YENİ: Tüm Kategorileri Getir (Dinamik Liste İçin) ---
+  Future<Set<String>> getAllCategories() async {
+    final snapshot = await _db.collection('events').get();
+    Set<String> categories = {};
+    for (var doc in snapshot.docs) {
+      final data = doc.data();
+      if (data['category'] != null) {
+        categories.add(data['category'] as String);
+      }
+    }
+    return categories;
+  }
+
   // --- FOTOĞRAF İŞLEMLERİ ---
 
   Future<String> imageToBase64(XFile imageFile) async {
@@ -16,7 +29,6 @@ class DatabaseService {
     return base64Encode(bytes);
   }
 
-  // Kapak fotoğrafı akışı
   Stream<QuerySnapshot> getCoverImageStream(String eventId) {
     return _db
         .collection('events')
@@ -27,7 +39,6 @@ class DatabaseService {
         .snapshots();
   }
 
-  // Kapak fotosu (Future)
   Future<String?> getCoverImage(String eventId) async {
     QuerySnapshot snapshot = await _db
         .collection('events')
@@ -42,8 +53,6 @@ class DatabaseService {
     return null;
   }
 
-  // --- GÜNCELLENMİŞ: ID ile birlikte resimleri çekme ---
-  // Artık sadece String listesi değil, {id: "...", data: "..."} şeklinde Map listesi dönüyor.
   Future<List<Map<String, dynamic>>> getImagesWithIds(String eventId) async {
     QuerySnapshot snapshot = await _db
         .collection('events')
@@ -58,12 +67,10 @@ class DatabaseService {
     }).toList();
   }
 
-  // --- YENİ: Anı Güncelleme ---
   Future<void> updateEvent(String id, Map<String, dynamic> data) async {
     await _db.collection('events').doc(id).update(data);
   }
 
-  // --- YENİ: Tekil Fotoğraf Ekleme (Düzenleme modu için) ---
   Future<void> addPhotoToAlbum(String eventId, XFile image) async {
     String base64 = await imageToBase64(image);
     await _db.collection('events').doc(eventId).collection('album').add({
@@ -72,12 +79,10 @@ class DatabaseService {
     });
   }
 
-  // --- YENİ: Tekil Fotoğraf Silme (Düzenleme modu için) ---
   Future<void> deletePhotoFromAlbum(String eventId, String photoId) async {
     await _db.collection('events').doc(eventId).collection('album').doc(photoId).delete();
   }
 
-  // Anı Ekleme (İlk oluşturma)
   Future<void> addEventWithImages(Map<String, dynamic> eventData, List<XFile> images) async {
     DocumentReference docRef = await _db.collection('events').add(eventData);
     for (var image in images) {

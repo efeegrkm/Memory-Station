@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart'; // kIsWeb için
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
@@ -29,6 +29,7 @@ class _MemoryDetailViewState extends State<MemoryDetailView> {
   late DateTime _selectedDate;
   late String _selectedCategory;
 
+  // Varsayılan + Dinamik olacak
   final List<String> _categories = ['Sinema', 'Piknik', 'Tiyatro', 'Gezi', 'Yürüyüş', 'Kutlama', 'Yemek', 'Diğer'];
 
   List<Map<String, dynamic>> _images = [];
@@ -44,6 +45,19 @@ class _MemoryDetailViewState extends State<MemoryDetailView> {
     _selectedCategory = widget.event.category;
     
     _loadImages();
+    _loadAllCategories();
+  }
+
+  // Kategorileri yükle
+  Future<void> _loadAllCategories() async {
+    final dynamicCategories = await _dbService.getAllCategories();
+    setState(() {
+      for (var cat in dynamicCategories) {
+        if (!_categories.contains(cat)) {
+          _categories.add(cat);
+        }
+      }
+    });
   }
 
   void _loadImages() async {
@@ -86,8 +100,6 @@ class _MemoryDetailViewState extends State<MemoryDetailView> {
   Future<void> _saveChanges() async {
     setState(() => _isSaving = true);
     try {
-      // TASK 1: Tarih değişikliği burada veritabanına gönderiliyor.
-      // Firestore, 'date' alanı değiştiğinde timeline sorgusunu otomatik günceller.
       await _dbService.updateEvent(widget.event.id, {
         'title': _titleController.text,
         'location': _locationController.text,
@@ -141,7 +153,6 @@ class _MemoryDetailViewState extends State<MemoryDetailView> {
     }
   }
 
-  // Tarih seçici yardımcı fonksiyonu
   Future<void> _pickDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -274,7 +285,6 @@ class _MemoryDetailViewState extends State<MemoryDetailView> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Başlık ve Düzenle/Kaydet Butonu
                         Row(
                           children: [
                             Expanded(
@@ -300,10 +310,8 @@ class _MemoryDetailViewState extends State<MemoryDetailView> {
                         
                         const SizedBox(height: 12),
                         
-                        // Tarih ve Kategori
                         Row(
                           children: [
-                            // TASK 1: Tarih Düzenleme Butonu
                             InkWell(
                               onTap: _isEditing ? _pickDate : null,
                               borderRadius: BorderRadius.circular(8),

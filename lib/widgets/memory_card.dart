@@ -3,23 +3,36 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../models/memory_event.dart';
-import '../services/database_service.dart'; // Database servisini eklemeyi unutma
+import '../services/database_service.dart';
 
 class MemoryCard extends StatelessWidget {
   final MemoryEvent event;
+  final double scale; // YENİ: Dışarıdan gelen zoom oranı
 
-  const MemoryCard({super.key, required this.event});
+  // Scale varsayılan olarak 1.0 (tam boyut)
+  const MemoryCard({super.key, required this.event, this.scale = 1.0});
 
   @override
   Widget build(BuildContext context) {
-    // Servisi başlatıyoruz
     final DatabaseService dbService = DatabaseService();
 
+    // Zoom seviyesine göre boyutları hesapla
+    // En küçük 0.5 oranına kadar düşsün, yoksa çok silik olur
+    final double effectiveScale = scale.clamp(0.5, 1.0); 
+    
+    final double imageHeight = 160 * effectiveScale;
+    final double titleSize = 18 * effectiveScale;
+    final double dateSize = 12 * effectiveScale;
+    final double iconSize = 14 * effectiveScale;
+    final double contentPadding = 16 * effectiveScale;
+    final double borderRadius = 24 * effectiveScale;
+
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      // Margin'i de küçültelim ki kartlar birbirine yaklaşsın
+      margin: EdgeInsets.symmetric(vertical: 16 * effectiveScale, horizontal: 8 * effectiveScale),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(borderRadius),
         boxShadow: AppTheme.glowShadow,
       ),
       child: Column(
@@ -28,29 +41,25 @@ class MemoryCard extends StatelessWidget {
           Stack(
             children: [
               ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                // --- DEĞİŞİKLİK BURADA BAŞLIYOR ---
-                // event.images yerine FutureBuilder kullanıyoruz
+                borderRadius: BorderRadius.vertical(top: Radius.circular(borderRadius)),
                 child: FutureBuilder<String?>(
-                  future: dbService.getCoverImage(event.id), // Kapak fotosunu çek
+                  future: dbService.getCoverImage(event.id),
                   builder: (context, snapshot) {
-                    // 1. Yükleniyor durumu
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return Container(
-                        height: 160,
+                        height: imageHeight,
                         width: double.infinity,
                         color: Colors.grey[200],
-                        child: const Center(
+                        child: Center(
                           child: SizedBox(
-                            width: 30, 
-                            height: 30, 
-                            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)
+                            width: 30 * effectiveScale, 
+                            height: 30 * effectiveScale, 
+                            child: CircularProgressIndicator(strokeWidth: 2 * effectiveScale, color: AppColors.primary)
                           )
                         ),
                       );
                     }
                     
-                    // 2. Resim geldi mi?
                     if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty) {
                       String imageString = snapshot.data!;
                       bool isBase64 = !imageString.startsWith('http');
@@ -58,44 +67,46 @@ class MemoryCard extends StatelessWidget {
                       return isBase64
                           ? Image.memory(
                               base64Decode(imageString),
-                              height: 160,
+                              height: imageHeight, // Dinamik yükseklik
                               width: double.infinity,
                               fit: BoxFit.cover,
                             )
                           : Image.network(
                               imageString,
-                              height: 160,
+                              height: imageHeight, // Dinamik yükseklik
                               width: double.infinity,
                               fit: BoxFit.cover,
                             );
                     }
                     
-                    // 3. Resim yoksa veya hata varsa varsayılan göster
                     return Container(
-                      height: 160,
+                      height: imageHeight,
                       width: double.infinity,
                       color: AppColors.accent,
-                      child: const Center(
-                        child: Icon(Icons.image, color: Colors.white, size: 40)
+                      child: Center(
+                        child: Icon(Icons.image, color: Colors.white, size: 40 * effectiveScale)
                       ),
                     );
                   },
                 ),
-                // --- DEĞİŞİKLİK BURADA BİTİYOR ---
               ),
               
               // Kategori Etiketi
               Positioned(
-                top: 12, right: 12,
+                top: 12 * effectiveScale, right: 12 * effectiveScale,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: EdgeInsets.symmetric(horizontal: 10 * effectiveScale, vertical: 4 * effectiveScale),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(12 * effectiveScale),
                   ),
                   child: Text(
                     event.category,
-                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textMain),
+                    style: TextStyle(
+                      fontSize: 10 * effectiveScale, // Fontu da küçült
+                      fontWeight: FontWeight.bold, 
+                      color: AppColors.textMain
+                    ),
                   ),
                 ),
               ),
@@ -103,7 +114,7 @@ class MemoryCard extends StatelessWidget {
           ),
           
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: EdgeInsets.all(contentPadding), // İç boşluk küçülüyor
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -111,15 +122,15 @@ class MemoryCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: EdgeInsets.symmetric(horizontal: 8 * effectiveScale, vertical: 4 * effectiveScale),
                       decoration: BoxDecoration(
                         color: AppColors.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(8 * effectiveScale),
                       ),
                       child: Text(
                         DateFormat('d MMMM yyyy', 'tr').format(event.date),
-                        style: const TextStyle(
-                          fontSize: 12, 
+                        style: TextStyle(
+                          fontSize: dateSize, 
                           color: AppColors.primaryDark,
                           fontWeight: FontWeight.bold
                         ),
@@ -127,26 +138,26 @@ class MemoryCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8 * effectiveScale),
                 Text(
                   event.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 18,
+                  style: TextStyle(
+                    fontSize: titleSize,
                     fontWeight: FontWeight.bold,
                     color: AppColors.textMain,
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4 * effectiveScale),
                 Row(
                   children: [
-                    const Icon(Icons.location_on_outlined, size: 14, color: AppColors.textLight),
-                    const SizedBox(width: 4),
+                    Icon(Icons.location_on_outlined, size: iconSize, color: AppColors.textLight),
+                    SizedBox(width: 4 * effectiveScale),
                     Expanded(
                       child: Text(
                         event.location,
-                        style: const TextStyle(fontSize: 12, color: AppColors.textLight),
+                        style: TextStyle(fontSize: dateSize, color: AppColors.textLight),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),

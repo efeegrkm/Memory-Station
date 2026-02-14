@@ -21,22 +21,22 @@ class TimelineScreen extends StatefulWidget {
 class _TimelineScreenState extends State<TimelineScreen> {
   final DatabaseService _dbService = DatabaseService();
   
-  // --- FİLTRELEME DURUMLARI ---
   bool _isFilterEnabled = false; 
   List<String> _selectedFilters = []; 
   DateTimeRange? _selectedDateRange;
   
-  // --- TASK 2: ZOOM STATE ---
-  // 1.0 = Tam boyut (Detaylı kart)
-  // 0.4 = En küçük boyut (Kompakt görünüm)
-  // Eşik değer: 0.6 (Bunun altı kompakta geçer)
+  // ZOOM STATE
   double _currentScale = 1.0; 
   double _baseScale = 1.0;
+  bool _showZoomControls = false;
 
   final List<String> _defaultCategories = [
     'Sinema', 'Piknik', 'Tiyatro', 'Gezi', 'Yürüyüş', 'Kutlama', 'Yemek', 'Diğer'
   ];
   Set<String> _allCategories = {};
+
+  // MİLAT TARİHİ: 7 ARALIK 2024
+  final DateTime _milestoneDate = DateTime(2024, 12, 7);
 
   @override
   void initState() {
@@ -191,7 +191,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
     );
   }
 
-  // --- COMPACT VIEW WIDGET (TASK 2) ---
+  // Kompakt Kart (Zoom < 0.6 veya "Başlangıç" kartı için)
   Widget _buildCompactCard(MemoryEvent event) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
@@ -218,10 +218,29 @@ class _TimelineScreenState extends State<TimelineScreen> {
               style: const TextStyle(fontWeight: FontWeight.w500),
             ),
           ),
-          const Icon(Icons.arrow_forward_ios, size: 12, color: AppColors.textLight),
+          // Başlangıç kartı ise ok işareti koyma
+          if (event.type != 'start_point')
+            const Icon(Icons.arrow_forward_ios, size: 12, color: AppColors.textLight),
         ],
       ),
     );
+  }
+
+  void _zoomIn() {
+    setState(() {
+      _currentScale = (_currentScale + 0.1).clamp(0.4, 1.0);
+    });
+  }
+
+  void _zoomOut() {
+    setState(() {
+      _currentScale = (_currentScale - 0.1).clamp(0.4, 1.0);
+    });
+  }
+
+  // Tarih karşılaştırma yardımcısı
+  bool isSameDay(DateTime date1, DateTime date2) {
+    return date1.year == date2.year && date1.month == date2.month && date1.day == date2.day;
   }
 
   @override
@@ -236,9 +255,50 @@ class _TimelineScreenState extends State<TimelineScreen> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text("Memory Station", style: GoogleFonts.pacifico(fontSize: 28, color: AppColors.purpleHeart)),
+                    Expanded(
+                      child: Text("Memory Station", style: GoogleFonts.pacifico(fontSize: 28, color: AppColors.purpleHeart)),
+                    ),
+                    
+                    if (_showZoomControls)
+                      Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              onPressed: _zoomOut,
+                              icon: const Icon(Icons.remove, size: 20, color: AppColors.primary),
+                              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                              padding: const EdgeInsets.all(8),
+                            ),
+                            IconButton(
+                              onPressed: _zoomIn,
+                              icon: const Icon(Icons.add, size: 20, color: AppColors.primary),
+                              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                              padding: const EdgeInsets.all(8),
+                            ),
+                          ],
+                        ),
+                      ),
+                    
+                    IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _showZoomControls = !_showZoomControls;
+                        });
+                      },
+                      icon: Icon(
+                        _showZoomControls ? Icons.search_off : Icons.search,
+                        color: AppColors.textMain, 
+                        size: 28
+                      ),
+                    ),
+                    
                     IconButton(
                       onPressed: _showSettingsDialog,
                       icon: const Icon(Icons.settings, color: AppColors.textMain, size: 28),
@@ -262,14 +322,12 @@ class _TimelineScreenState extends State<TimelineScreen> {
               ),
 
             Expanded(
-              // TASK 2: GESTURE DETECTOR ILE ZOOM (SCALE) ALGILAMA
               child: GestureDetector(
                 onScaleStart: (details) {
                   _baseScale = _currentScale;
                 },
                 onScaleUpdate: (details) {
                   setState(() {
-                    // Zoom seviyesini 0.4 ile 1.0 arasında tutuyoruz
                     _currentScale = (_baseScale * details.scale).clamp(0.4, 1.0);
                   });
                 },
@@ -281,6 +339,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
 
                     final docs = snapshot.data!.docs;
 
+                    // Kategorileri topla
                     for (var doc in docs) {
                       final map = doc.data() as Map<String, dynamic>;
                       if (map['category'] != null) {
@@ -288,67 +347,104 @@ class _TimelineScreenState extends State<TimelineScreen> {
                       }
                     }
                     
-                    final data = docs.where((doc) {
+                    // --- ÖNEMLİ: VERİ LİSTESİNİ HAZIRLA ---
+                    List<MemoryEvent> events = docs.map((doc) => MemoryEvent.fromFirestore(doc)).toList();
+
+                    // Filtreleme uygula
+                    events = events.where((event) {
                       if (!_isFilterEnabled) return true;
-                      final map = doc.data() as Map<String, dynamic>;
-                      final category = map['category'] ?? 'Diğer';
-                      final date = (map['date'] as Timestamp).toDate();
-                      bool categoryMatch = _selectedFilters.isEmpty || _selectedFilters.contains(category);
+                      bool categoryMatch = _selectedFilters.isEmpty || _selectedFilters.contains(event.category);
                       bool dateMatch = true;
                       if (_selectedDateRange != null) {
-                        dateMatch = date.isAfter(_selectedDateRange!.start.subtract(const Duration(days: 1))) && 
-                                    date.isBefore(_selectedDateRange!.end.add(const Duration(days: 1)));
+                        dateMatch = event.date.isAfter(_selectedDateRange!.start.subtract(const Duration(days: 1))) && 
+                                    event.date.isBefore(_selectedDateRange!.end.add(const Duration(days: 1)));
                       }
                       return categoryMatch && dateMatch;
                     }).toList();
 
-                    if (data.isEmpty) return const Center(child: Text("Anı bulunamadı."));
+                    // --- MİLAT NOKTASI MANTIĞI ---
+                    // Eğer filtrelenmiş listede 7 Aralık 2024 yoksa, manuel ekle.
+                    bool hasMilestone = events.any((e) => isSameDay(e.date, _milestoneDate));
+                    
+                    if (!hasMilestone) {
+                      events.add(MemoryEvent(
+                        id: 'milestone_fixed', 
+                        title: 'Başlangıç', 
+                        location: '', 
+                        description: 'Bizim hikayemiz burada başladı...', 
+                        date: _milestoneDate, 
+                        category: 'Özel', 
+                        type: 'start_point' // Özel tip
+                      ));
+                    }
 
-                    // Zoom durumuna göre görünüm değişimi
-                    bool isCompact = _currentScale < 0.6;
+                    // Tarihe göre sırala (Yeniden eskiye)
+                    events.sort((a, b) => b.date.compareTo(a.date));
+
+                    if (events.isEmpty) return const Center(child: Text("Anı bulunamadı."));
+
+                    bool isCompactMode = _currentScale < 0.6;
 
                     return ListView.builder(
-                      // Zoom yaptıkça liste paddingini de ayarlayalım ki ferahlasın veya sıkışsın
-                      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10 * _currentScale),
-                      itemCount: data.length,
+                      padding: EdgeInsets.fromLTRB(10, 10 * _currentScale, 20, 10 * _currentScale),
+                      itemCount: events.length,
                       itemBuilder: (context, index) {
-                        final event = MemoryEvent.fromFirestore(data[index]);
+                        final event = events[index];
+                        final bool isMilestoneEvent = isSameDay(event.date, _milestoneDate);
                         
+                        IconData iconData = isMilestoneEvent ? Icons.star : Icons.favorite;
+                        Color iconColor = isMilestoneEvent ? Colors.amber : AppColors.purpleHeart;
+
+                        // --- DÜZELTME BURADA ---
+                        // copyWith yerine doğrudan LineStyle oluşturuyoruz
+                        final LineStyle beforeLineStyle = index == 0 
+                          ? LineStyle(
+                              thickness: isCompactMode ? 1 : 3 * _currentScale,
+                              // Gradient yerine düz renk kullanıyoruz ama şeffaflık veriyoruz
+                              color: AppColors.timelineLine.withOpacity(0.3), 
+                            )
+                          : LineStyle(
+                              color: AppColors.timelineLine, 
+                              thickness: isCompactMode ? 1 : 3 * _currentScale
+                            );
+                        // -----------------------
+
+                        final LineStyle afterLineStyle = isMilestoneEvent 
+                          ? const LineStyle(thickness: 0, color: Colors.transparent)
+                          : LineStyle(color: AppColors.timelineLine, thickness: isCompactMode ? 1 : 3 * _currentScale);
+
                         return TimelineTile(
                           alignment: TimelineAlign.manual,
-                          lineXY: 0.15,
+                          lineXY: 0.05,
                           isFirst: index == 0,
-                          isLast: index == data.length - 1,
+                          isLast: index == events.length - 1,
                           indicatorStyle: IndicatorStyle(
-                            // TASK 2: Kalpler birbirine yaklaşacak
-                            // Zoom azaldıkça width ve padding küçülür
-                            width: isCompact ? 16 : 28 * _currentScale, 
+                            width: isCompactMode ? 16 : (isMilestoneEvent ? 32 : 28) * _currentScale, 
                             color: AppColors.background,
-                            padding: EdgeInsets.all(isCompact ? 2 : 4 * _currentScale),
+                            padding: EdgeInsets.all(isCompactMode ? 2 : 4 * _currentScale),
                             iconStyle: IconStyle(
-                              color: AppColors.purpleHeart,
-                              iconData: Icons.favorite,
-                              // Zoom out yapınca ikon da küçülsün
-                              fontSize: isCompact ? 12 : 20 * _currentScale,
+                              color: iconColor,
+                              iconData: iconData,
+                              fontSize: isCompactMode ? 12 : (isMilestoneEvent ? 24 : 20) * _currentScale,
                             ),
                           ),
-                          // Çizgi kalınlığı da incelsin
-                          beforeLineStyle: LineStyle(color: AppColors.timelineLine, thickness: isCompact ? 1 : 3 * _currentScale),
+                          beforeLineStyle: beforeLineStyle,
+                          afterLineStyle: afterLineStyle, // Bunu eklemeyi unutmuştuk, şimdi ekledik
                           
                           endChild: GestureDetector(
-                            onTap: () => showModalBottomSheet(
-                              context: context, 
-                              isScrollControlled: true, 
-                              backgroundColor: Colors.transparent, 
-                              builder: (_) => MemoryDetailView(event: event)
-                            ),
-                            // TASK 2: Zoom level'a göre Widget değişimi
-                            child: isCompact 
-                              ? _buildCompactCard(event) // 0.6'nın altındaysa Kompakt
-                              : Transform.scale(
-                                  // 0.6 üzerindeyse normal kart ama biraz scale etkisi verelim
-                                  scale: _currentScale < 0.8 ? 0.95 : 1.0, 
-                                  child: MemoryCard(event: event)
+                            onTap: event.type == 'start_point' 
+                              ? null // Tıklanamaz
+                              : () => showModalBottomSheet(
+                                  context: context, 
+                                  isScrollControlled: true, 
+                                  backgroundColor: Colors.transparent, 
+                                  builder: (_) => MemoryDetailView(event: event)
+                                ),
+                            child: (event.type == 'start_point')
+                              ? _buildCompactCard(event) // Başlangıç her zaman kompakt
+                              : (isCompactMode 
+                                  ? _buildCompactCard(event) 
+                                  : MemoryCard(event: event, scale: _currentScale)
                                 ),
                           ),
                         );

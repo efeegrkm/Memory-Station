@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../services/database_service.dart';
+// permission_handler kaldırıldı
 
 class AddEventScreen extends StatefulWidget {
   const AddEventScreen({super.key});
@@ -23,12 +24,31 @@ class _AddEventScreenState extends State<AddEventScreen> {
   List<XFile> _selectedImages = [];
   bool _isLoading = false;
   
-  // Kategoriler
+  // Varsayılan Kategoriler
   final List<String> _categories = ['Sinema', 'Piknik', 'Tiyatro', 'Gezi', 'Yürüyüş', 'Kutlama', 'Yemek'];
   String _selectedCategory = 'Gezi';
 
   final DatabaseService _dbService = DatabaseService();
 
+  @override
+  void initState() {
+    super.initState();
+    _loadAllCategories();
+  }
+
+  // Dinamik kategorileri yükle
+  Future<void> _loadAllCategories() async {
+    final dynamicCategories = await _dbService.getAllCategories();
+    setState(() {
+      for (var cat in dynamicCategories) {
+        if (!_categories.contains(cat)) {
+          _categories.add(cat);
+        }
+      }
+    });
+  }
+
+  // İzin kodu kaldırıldı, eski sade haline döndü
   Future<void> _pickImages() async {
     final picker = ImagePicker();
     final List<XFile> pickedFiles = await picker.pickMultiImage(
@@ -78,7 +98,6 @@ class _AddEventScreenState extends State<AddEventScreen> {
   }
 
   void _saveEvent() async {
-    // Form validasyonu çağırıyoruz ama artık fieldlar zorunlu değil
     if (!_formKey.currentState!.validate()) return;
     
     if (_selectedImages.isEmpty) {
@@ -90,8 +109,8 @@ class _AddEventScreenState extends State<AddEventScreen> {
 
     try {
       Map<String, dynamic> eventData = {
-        'title': _titleController.text, // Boş olabilir
-        'location': _locationController.text, // Boş olabilir
+        'title': _titleController.text,
+        'location': _locationController.text,
         'description': _descController.text,
         'date': _selectedDate,
         'category': _selectedCategory,
@@ -131,7 +150,6 @@ class _AddEventScreenState extends State<AddEventScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Fotoğraf Alanı
                 SizedBox(
                   height: 120,
                   child: ListView.builder(
@@ -187,7 +205,6 @@ class _AddEventScreenState extends State<AddEventScreen> {
                 ),
                 const SizedBox(height: 20),
                 
-                // Başlık ve Konum (Zorunluluk Kalktı)
                 _buildTextField(_titleController, "Başlık (İsteğe bağlı)", Icons.edit, isRequired: false),
                 const SizedBox(height: 12),
                 _buildTextField(_locationController, "Konum (İsteğe bağlı)", Icons.location_on, isRequired: false),
@@ -243,8 +260,9 @@ class _AddEventScreenState extends State<AddEventScreen> {
                   onTap: () async {
                     final DateTime? picked = await showDatePicker(
                       context: context,
-                      initialDate: _selectedDate,
-                      firstDate: DateTime(2000),
+                      initialDate: _selectedDate.isBefore(DateTime(2024, 12, 7)) ? DateTime(2024, 12, 7) : _selectedDate,
+                      // BAŞLANGIÇ TARİHİ KISITLAMASI: 7 Aralık 2024
+                      firstDate: DateTime(2024, 12, 7),
                       lastDate: DateTime(2050),
                     );
                     if (picked != null) setState(() => _selectedDate = picked);
@@ -291,7 +309,6 @@ class _AddEventScreenState extends State<AddEventScreen> {
     );
   }
 
-  // isRequired parametresi eklendi
   Widget _buildTextField(TextEditingController controller, String hint, IconData icon, {bool isRequired = true}) {
     return Container(
       decoration: BoxDecoration(
@@ -301,7 +318,6 @@ class _AddEventScreenState extends State<AddEventScreen> {
       ),
       child: TextFormField(
         controller: controller,
-        // Validator artık opsiyonel
         validator: isRequired ? (val) => val!.isEmpty ? 'Boş bırakılamaz' : null : null,
         decoration: InputDecoration(
           hintText: hint,
