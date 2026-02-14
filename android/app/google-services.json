@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "739281803160",
+    "project_id": "memorystation-d823b",
+    "storage_bucket": "memorystation-d823b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:739281803160:android:ce9c24bdbfd3428224fded",
+        "android_client_info": {
+          "package_name": "com.example.memory_station"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCfQEp8W8e2k2PSqHbH5tl7IFgwR7A9JAY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
