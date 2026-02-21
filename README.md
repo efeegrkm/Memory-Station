@@ -28,7 +28,11 @@ Bu proje, anıları fotoğraflar, konum bilgileri ve özel notlarla ölümsüzle
 * `audioplayers`
 
 ## Ekran Görüntüleri
-| ![](screenshots/ss1.png) | ![](screenshots/ss2.png) | ![](screenshots/ss3.png) |
+<p align="center">
+  <img src="screenshots/ss1.png" width="30%" />
+  <img src="screenshots/ss2.png" width="30%" />
+  <img src="screenshots/ss3.png" width="30%" />
+</p>
 
 ## Kurulum
 
