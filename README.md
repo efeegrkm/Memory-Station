@@ -30,7 +30,7 @@ Bu proje, anıları fotoğraflar, konum bilgileri ve özel notlarla ölümsüzle
 
 | Timeline | Anı Ekle | Detay Görünümü |
 |:---:|:---:|:---:|
-| ![Timeline](screenshots/ss1.png) | ![Anı Ekle](screenshots/ss2.png) | ![Detay Görünümü](screenshots/ss3.png) |
+| ![](screenshots/ss1.png) | ![](screenshots/ss2.png) | ![](screenshots/ss3.png) |
 
 ## Kurulum
 
