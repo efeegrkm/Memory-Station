@@ -11,6 +11,7 @@ Bu proje, anıları fotoğraflar, konum bilgileri ve özel notlarla ölümsüzle
 * ** Dinamik Kategoriler:** Anılarınızı (Sinema, Gezi, Yemek vb.) kategorilere ayırın ve yeni kategoriler oluşturun.
 * ** Gelişmiş Filtreleme:** Tarih aralığına ve kategorilere göre anılarınızı filtreleyin.
 * ** Özel Tasarım:** Yumuşak gradyanlar, özel fontlar ve "Soft UI" gölgelendirmelerle modern bir arayüz.
+* ** Harita Görünümü:** OSM implementasyonu sayesinde tüm anı kartlarını dünya haritasında görüntüleyin.
 * ** Bulut Tabanlı:** Veriler Firebase Firestore üzerinde güvenle saklanır (Fotoğraflar Base64 formatında optimize edilerek tutulur).
 
 ## Kullanılan Teknolojiler
@@ -27,9 +28,6 @@ Bu proje, anıları fotoğraflar, konum bilgileri ve özel notlarla ölümsüzle
 * `audioplayers`
 
 ## Ekran Görüntüleri
-
-| Timeline | Anı Ekle | Detay Görünümü |
-|:---:|:---:|:---:|
 | ![](screenshots/ss1.png) | ![](screenshots/ss2.png) | ![](screenshots/ss3.png) |
 
 ## Kurulum
@@ -48,7 +46,8 @@ Bu projeyi kendi bilgisayarınızda çalıştırmak için:
     ```bash
     flutter pub get
     ```
-4.  Firebase ayarlarını yapılandırın (kendi `google-services.json` dosyanızı ekleyin).
+4.  Firebase veritabanı ayarlarını yapılandırın (kendi `firebase_options.dart` dosyanızı firebase console kullanarak ekleyin).
+   
 5.  Uygulamayı başlatın:
     ```bash
     flutter run
