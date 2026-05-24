@@ -1,12 +1,14 @@
 import 'dart:io';
+import 'dart:convert'; 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:timeline_tile/timeline_tile.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-// YENİ IMPORTLAR
+
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart'; 
 
 import '../theme/app_theme.dart';
 import '../models/memory_event.dart';
@@ -29,13 +31,16 @@ class _TimelineScreenState extends State<TimelineScreen> {
   List<String> _selectedFilters = []; 
   DateTimeRange? _selectedDateRange;
   
-  // ZOOM STATE
   double _currentScale = 1.0; 
   double _baseScale = 1.0;
   bool _showZoomControls = false;
   
-  // YENİ: Harita Modu Switch
   bool _isMapView = false;
+  String? _selectedMarkerEventId;
+
+  final MapController _mapController = MapController();
+  LatLng? _lastMapCenter;
+  double? _lastMapZoom;
 
   final int _futureDotCount = 3; 
 
@@ -46,10 +51,14 @@ class _TimelineScreenState extends State<TimelineScreen> {
 
   final DateTime _milestoneDate = DateTime(2024, 12, 7);
 
+  // --- ÇÖZÜM: Veritabanı akışını sabitliyoruz, böylece setState'te harita silinmez ---
+  late Stream<QuerySnapshot> _eventsStream;
+
   @override
   void initState() {
     super.initState();
     _allCategories.addAll(_defaultCategories);
+    _eventsStream = _dbService.getEvents(); // Akışı başlarken bir kez al
   }
 
   void _showSettingsDialog() {
@@ -87,6 +96,24 @@ class _TimelineScreenState extends State<TimelineScreen> {
                     foregroundColor: AppColors.textMain,
                   ),
                 ),
+                const Divider(),
+                
+                // --- ÇÖZÜM: Ayarlar Menüsü Dropdown Düzeltmesi ---
+                ListTile(
+                  leading: const Icon(Icons.map, color: AppColors.primary),
+                  title: const Text("Harita Görünümü", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  trailing: DropdownButton<String>(
+                    value: AppMapStyles.currentStyle,
+                    underline: const SizedBox(), // Alt çizgiyi kaldırdık
+                    icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.primary),
+                    items: AppMapStyles.styles.keys.map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 14)))).toList(),
+                    onChanged: (val) {
+                      setState(() => AppMapStyles.currentStyle = val!);
+                      setStateInternal(() {});
+                    },
+                  ),
+                ),
+                
                 const Divider(),
                 ListTile(
                   leading: const Icon(Icons.delete_forever, color: Colors.red),
@@ -248,9 +275,70 @@ class _TimelineScreenState extends State<TimelineScreen> {
     return date1.year == date2.year && date1.month == date2.month && date1.day == date2.day;
   }
 
-  // --- HARİTA GÖRÜNÜMÜ WIDGET'I ---
+  Widget _buildPinMarker(MemoryEvent event) {
+    return GestureDetector(
+      onTap: () {
+        setState(() => _selectedMarkerEventId = event.id);
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.primary, width: 2),
+              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+            ),
+            child: const Icon(Icons.favorite, color: AppColors.purpleHeart, size: 20),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPopupMarker(MemoryEvent event) {
+    return GestureDetector(
+      onTap: () {
+        showModalBottomSheet(
+          context: context, 
+          isScrollControlled: true, 
+          backgroundColor: Colors.transparent, 
+          builder: (_) => MemoryDetailView(event: event)
+        );
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 80, height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.primary, width: 2),
+              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8)],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: FutureBuilder<String?>(
+                future: _dbService.getCoverImage(event.id),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty) {
+                    return Image.memory(base64Decode(snapshot.data!), fit: BoxFit.cover);
+                  }
+                  return const Center(child: Icon(Icons.image, color: Colors.grey));
+                },
+              ),
+            ),
+          ),
+          const Icon(Icons.arrow_drop_down, color: AppColors.primary, size: 30),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMapView(List<MemoryEvent> events) {
-    // Sadece koordinatı olanları filtrele
     final mapEvents = events.where((e) => e.latitude != null && e.longitude != null).toList();
 
     if (mapEvents.isEmpty) {
@@ -267,43 +355,56 @@ class _TimelineScreenState extends State<TimelineScreen> {
     }
 
     return FlutterMap(
+      mapController: _mapController, 
       options: MapOptions(
-        // İlk açılışta ilk anıya odaklan
-        initialCenter: LatLng(mapEvents.first.latitude!, mapEvents.first.longitude!),
-        initialZoom: 12.0,
+        initialCenter: _lastMapCenter ?? LatLng(mapEvents.first.latitude!, mapEvents.first.longitude!),
+        initialZoom: _lastMapZoom ?? 12.0,
+        interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+        onPositionChanged: (camera, hasGesture) {
+          _lastMapCenter = camera.center;
+          _lastMapZoom = camera.zoom;
+        },
+        onTap: (tapPosition, point) => setState(() => _selectedMarkerEventId = null),
       ),
       children: [
         TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          urlTemplate: AppMapStyles.styles[AppMapStyles.currentStyle]!, 
           userAgentPackageName: 'com.memorystation.app',
         ),
-        MarkerLayer(
-          markers: mapEvents.map((event) {
-            return Marker(
-              point: LatLng(event.latitude!, event.longitude!),
-              width: 50,
-              height: 50,
-              child: GestureDetector(
-                onTap: () {
-                  showModalBottomSheet(
-                    context: context, 
-                    isScrollControlled: true, 
-                    backgroundColor: Colors.transparent, 
-                    builder: (_) => MemoryDetailView(event: event)
-                  );
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.primary, width: 2),
-                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
-                  ),
-                  child: const Icon(Icons.favorite, color: AppColors.purpleHeart, size: 24),
+        MarkerClusterLayerWidget(
+          options: MarkerClusterLayerOptions(
+            maxClusterRadius: 45,
+            size: const Size(40, 40),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.all(50),
+            markers: mapEvents.map((event) {
+              bool isSelected = _selectedMarkerEventId == event.id;
+              
+              return Marker(
+                point: LatLng(event.latitude!, event.longitude!),
+                width: isSelected ? 120 : 50,
+                height: isSelected ? 120 : 50,
+                alignment: Alignment.topCenter,
+                child: isSelected ? _buildPopupMarker(event) : _buildPinMarker(event),
+              );
+            }).toList(),
+            builder: (context, markers) {
+              return Container(
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
                 ),
-              ),
-            );
-          }).toList(),
+                child: Center(
+                  child: Text(
+                    markers.length.toString(),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       ],
     );
@@ -389,8 +490,9 @@ class _TimelineScreenState extends State<TimelineScreen> {
               ),
 
             Expanded(
+              // ÇÖZÜM: Stream'i artık sabit değişkenden çekiyoruz
               child: StreamBuilder<QuerySnapshot>(
-                stream: _dbService.getEvents(),
+                stream: _eventsStream,
                 builder: (context, snapshot) {
                   if (snapshot.hasError) return const Center(child: Text("Hata oluştu"));
                   if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
@@ -417,12 +519,10 @@ class _TimelineScreenState extends State<TimelineScreen> {
                     return categoryMatch && dateMatch;
                   }).toList();
 
-                  // HARİTA GÖRÜNÜMÜ KONTROLÜ
                   if (_isMapView) {
                     return _buildMapView(events);
                   }
 
-                  // -- LİSTE GÖRÜNÜMÜ MANTIĞI --
                   bool hasMilestone = events.any((e) => isSameDay(e.date, _milestoneDate));
                   
                   if (!hasMilestone) {
@@ -554,13 +654,12 @@ class _TimelineScreenState extends State<TimelineScreen> {
           ],
         ),
       ),
-      floatingActionButton: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          // Sol Alt: Haritaya Git Butonu
-          Padding(
-            padding: const EdgeInsets.only(left: 30), // Scaffold boşluğu
-            child: FloatingActionButton(
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(left: 32.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            FloatingActionButton(
               heroTag: "mapToggle",
               onPressed: () {
                 setState(() {
@@ -571,17 +670,15 @@ class _TimelineScreenState extends State<TimelineScreen> {
               foregroundColor: AppColors.primary,
               child: Icon(_isMapView ? Icons.list : Icons.map),
             ),
-          ),
-          const Spacer(),
-          // Sağ Alt: Anı Ekle Butonu
-          FloatingActionButton.extended(
-            heroTag: "addEvent",
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddEventScreen())),
-            backgroundColor: AppColors.primary,
-            icon: const Icon(Icons.add_a_photo, color: Colors.white),
-            label: const Text("Anı Ekle", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
+            FloatingActionButton.extended(
+              heroTag: "addEvent",
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddEventScreen())),
+              backgroundColor: AppColors.primary,
+              icon: const Icon(Icons.add_a_photo, color: Colors.white),
+              label: const Text("Anı Ekle", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
       ),
     );
   }

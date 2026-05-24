@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:latlong2/latlong.dart'; // YENİ
+import 'package:latlong2/latlong.dart';
 import '../models/memory_event.dart';
 import '../theme/app_theme.dart';
 import '../services/database_service.dart';
-import '../screens/map_picker_screen.dart'; // YENİ
+import '../screens/map_picker_screen.dart';
 
 class MemoryDetailView extends StatefulWidget {
   final MemoryEvent event;
@@ -29,6 +29,7 @@ class _MemoryDetailViewState extends State<MemoryDetailView> {
   late TextEditingController _descController;
   late DateTime _selectedDate;
   late String _selectedCategory;
+  LatLng? _editedLocation; // Düzenleme modu için yeni konum
 
   final List<String> _categories = ['Sinema', 'Piknik', 'Tiyatro', 'Gezi', 'Yürüyüş', 'Kutlama', 'Yemek', 'Diğer'];
 
@@ -44,7 +45,30 @@ class _MemoryDetailViewState extends State<MemoryDetailView> {
     _selectedDate = widget.event.date;
     _selectedCategory = widget.event.category;
     
+    // Mevcut konumu al
+    if (widget.event.latitude != null && widget.event.longitude != null) {
+      _editedLocation = LatLng(widget.event.latitude!, widget.event.longitude!);
+    }
+    
+    _loadCategories(); // Madde 2: Tüm kategorileri dinamik yükle
     _loadImages();
+  }
+
+  void _loadCategories() async {
+    final dynamicCategories = await _dbService.getAllCategories();
+    if (mounted) {
+      setState(() {
+        for (var cat in dynamicCategories) {
+          if (!_categories.contains(cat)) {
+            _categories.add(cat);
+          }
+        }
+        // Eğer seçili kategori listede yoksa yine de ekle (güvence)
+        if (!_categories.contains(_selectedCategory)) {
+          _categories.add(_selectedCategory);
+        }
+      });
+    }
   }
 
   void _loadImages() async {
@@ -93,6 +117,8 @@ class _MemoryDetailViewState extends State<MemoryDetailView> {
         'description': _descController.text,
         'date': _selectedDate, 
         'category': _selectedCategory,
+        'latitude': _editedLocation?.latitude,   // Madde 3: Yeni konumu kaydet
+        'longitude': _editedLocation?.longitude, // Madde 3: Yeni konumu kaydet
       });
       
       setState(() {
@@ -156,280 +182,301 @@ class _MemoryDetailViewState extends State<MemoryDetailView> {
       },
     );
     if (picked != null && picked != _selectedDate) {
-      setState(() {
-        _selectedDate = picked;
-      });
+      setState(() => _selectedDate = picked);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.9,
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      child: Column(
-        children: [
-          Center(
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 12),
-              width: 50, height: 5,
-              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
+    // Madde 1: Klavye yüksekliğini alıp ekranı yukarı itmek için Padding
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.9,
+        decoration: const BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          children: [
+            Center(
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                width: 50, height: 5,
+                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
+              ),
             ),
-          ),
-          
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // --- GALERİ ALANI ---
-                  SizedBox(
-                    height: 350,
-                    child: _isLoading 
-                      ? const Center(child: CircularProgressIndicator())
-                      : Stack(
-                          children: [
-                            if (_images.isEmpty)
-                              Container(
-                                color: Colors.grey[200],
-                                child: const Center(child: Text("Fotoğraf Yok")),
-                              )
-                            else
-                              PageView.builder(
-                                controller: _pageController,
-                                itemCount: _images.length,
-                                onPageChanged: (index) => setState(() => _currentImageIndex = index),
-                                itemBuilder: (context, index) {
-                                  final imgData = _images[index];
-                                  return Stack(
-                                    children: [
-                                      Container(
-                                        margin: const EdgeInsets.symmetric(horizontal: 10),
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(20),
-                                          boxShadow: AppTheme.glowShadow,
-                                          image: DecorationImage(
-                                            image: MemoryImage(base64Decode(imgData['data'])),
-                                            fit: BoxFit.cover,
-                                          ),
-                                        ),
-                                      ),
-                                      if (_isEditing)
-                                        Positioned(
-                                          top: 10, right: 20,
-                                          child: GestureDetector(
-                                            onTap: () => _deletePhoto(imgData['id']),
-                                            child: Container(
-                                              padding: const EdgeInsets.all(8),
-                                              decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                                              child: const Icon(Icons.delete, color: Colors.white, size: 20),
+            
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // --- GALERİ ALANI ---
+                    SizedBox(
+                      height: 350,
+                      child: _isLoading 
+                        ? const Center(child: CircularProgressIndicator())
+                        : Stack(
+                            children: [
+                              if (_images.isEmpty)
+                                Container(
+                                  color: Colors.grey[200],
+                                  child: const Center(child: Text("Fotoğraf Yok")),
+                                )
+                              else
+                                PageView.builder(
+                                  controller: _pageController,
+                                  itemCount: _images.length,
+                                  onPageChanged: (index) => setState(() => _currentImageIndex = index),
+                                  itemBuilder: (context, index) {
+                                    final imgData = _images[index];
+                                    return Stack(
+                                      children: [
+                                        Container(
+                                          margin: const EdgeInsets.symmetric(horizontal: 10),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(20),
+                                            boxShadow: AppTheme.glowShadow,
+                                            image: DecorationImage(
+                                              image: MemoryImage(base64Decode(imgData['data'])),
+                                              fit: BoxFit.cover,
                                             ),
                                           ),
                                         ),
+                                        if (_isEditing)
+                                          Positioned(
+                                            top: 10, right: 20,
+                                            child: GestureDetector(
+                                              onTap: () => _deletePhoto(imgData['id']),
+                                              child: Container(
+                                                padding: const EdgeInsets.all(8),
+                                                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                                child: const Icon(Icons.delete, color: Colors.white, size: 20),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                              
+                              if (_isEditing)
+                                Positioned(
+                                  bottom: 20, right: 20,
+                                  child: FloatingActionButton(
+                                    mini: true,
+                                    onPressed: _addNewPhoto,
+                                    backgroundColor: AppColors.primary,
+                                    child: const Icon(Icons.add_a_photo, color: Colors.white),
+                                  ),
+                                ),
+                              
+                              if (!_isEditing && _images.length > 1)
+                                Positioned(
+                                  bottom: 10, left: 0, right: 0,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: _images.asMap().entries.map((entry) {
+                                      return Container(
+                                        width: 8, height: 8,
+                                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: _currentImageIndex == entry.key ? AppColors.primary : Colors.white,
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                            ],
+                          ),
+                    ),
+
+                    // --- BİLGİLER ALANI ---
+                    Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _isEditing
+                                  ? TextFormField(
+                                      controller: _titleController,
+                                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textMain),
+                                      decoration: const InputDecoration(hintText: "Başlık"),
+                                    )
+                                  : Text(
+                                      _titleController.text,
+                                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.textMain),
+                                    ),
+                              ),
+                              IconButton(
+                                onPressed: _toggleEdit,
+                                icon: _isSaving 
+                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : Icon(_isEditing ? Icons.save : Icons.edit, color: AppColors.primary),
+                              )
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          
+                          Row(
+                            children: [
+                              InkWell(
+                                onTap: _isEditing ? _pickDate : null,
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: _isEditing 
+                                    ? BoxDecoration(border: Border.all(color: AppColors.primary), borderRadius: BorderRadius.circular(8))
+                                    : null,
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.calendar_today, size: 16, color: _isEditing ? AppColors.primary : Colors.grey),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        DateFormat('d MMMM yyyy', 'tr').format(_selectedDate),
+                                        style: TextStyle(
+                                          fontSize: 16, 
+                                          color: _isEditing ? AppColors.primary : Colors.grey,
+                                          fontWeight: _isEditing ? FontWeight.bold : FontWeight.normal
+                                        ),
+                                      ),
                                     ],
+                                  ),
+                                ),
+                              ),
+                              const Spacer(),
+                              _isEditing
+                                ? DropdownButton<String>(
+                                    value: _selectedCategory,
+                                    items: _categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
+                                    onChanged: (val) => setState(() => _selectedCategory = val!),
+                                  )
+                                : Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(8)),
+                                    child: Text(_selectedCategory, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textMain)),
+                                  ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+
+                          Row(
+                            children: [
+                              const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                              const SizedBox(width: 8),
+                              _isEditing
+                                ? Expanded(child: TextFormField(controller: _locationController))
+                                : Expanded(child: Text(_locationController.text, style: const TextStyle(fontSize: 16, color: Colors.grey))),
+                            ],
+                          ),
+                          
+                          // Madde 3: Düzenleme modundayken konumu değiştirebilme
+                          if (_editedLocation != null && !_isEditing)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12.0),
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => MapPickerScreen(
+                                        initialLocation: _editedLocation,
+                                        isReadOnly: true,
+                                      ),
+                                    ),
                                   );
                                 },
-                              ),
-                            
-                            if (_isEditing)
-                              Positioned(
-                                bottom: 20, right: 20,
-                                child: FloatingActionButton(
-                                  mini: true,
-                                  onPressed: _addNewPhoto,
-                                  backgroundColor: AppColors.primary,
-                                  child: const Icon(Icons.add_a_photo, color: Colors.white),
-                                ),
-                              ),
-                            
-                            if (!_isEditing && _images.length > 1)
-                              Positioned(
-                                bottom: 10, left: 0, right: 0,
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: _images.asMap().entries.map((entry) {
-                                    return Container(
-                                      width: 8, height: 8,
-                                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: _currentImageIndex == entry.key ? AppColors.primary : Colors.white,
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                          ],
-                        ),
-                  ),
-
-                  // --- BİLGİLER ALANI ---
-                  Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // BAŞLIK
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _isEditing
-                                ? TextFormField(
-                                    controller: _titleController,
-                                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textMain),
-                                    decoration: const InputDecoration(hintText: "Başlık"),
-                                  )
-                                : Text(
-                                    _titleController.text,
-                                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.textMain),
-                                  ),
-                            ),
-                            IconButton(
-                              onPressed: _toggleEdit,
-                              icon: _isSaving 
-                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                                : Icon(_isEditing ? Icons.save : Icons.edit, color: AppColors.primary),
-                            )
-                          ],
-                        ),
-                        
-                        const SizedBox(height: 12),
-                        
-                        // TARİH ve KATEGORİ
-                        Row(
-                          children: [
-                            InkWell(
-                              onTap: _isEditing ? _pickDate : null,
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: _isEditing 
-                                  ? BoxDecoration(border: Border.all(color: AppColors.primary), borderRadius: BorderRadius.circular(8))
-                                  : null,
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.calendar_today, size: 16, color: _isEditing ? AppColors.primary : Colors.grey),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      DateFormat('d MMMM yyyy', 'tr').format(_selectedDate),
-                                      style: TextStyle(
-                                        fontSize: 16, 
-                                        color: _isEditing ? AppColors.primary : Colors.grey,
-                                        fontWeight: _isEditing ? FontWeight.bold : FontWeight.normal
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            
-                            const Spacer(),
-                            
-                            _isEditing
-                              ? DropdownButton<String>(
-                                  value: _categories.contains(_selectedCategory) ? _selectedCategory : 'Diğer',
-                                  items: _categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
-                                  onChanged: (val) => setState(() => _selectedCategory = val!),
-                                )
-                              : Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(8)),
-                                  child: Text(_selectedCategory, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textMain)),
-                                ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        // KONUM
-                        Row(
-                          children: [
-                            const Icon(Icons.location_on, size: 16, color: Colors.grey),
-                            const SizedBox(width: 8),
-                            _isEditing
-                              ? Expanded(child: TextFormField(controller: _locationController))
-                              : Expanded(child: Text(_locationController.text, style: const TextStyle(fontSize: 16, color: Colors.grey))),
-                          ],
-                        ),
-                        
-                        // --- YENİ: HARİTADA GÖSTER BUTONU ---
-                        if (widget.event.latitude != null && widget.event.longitude != null && !_isEditing)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12.0),
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => MapPickerScreen(
-                                      initialLocation: LatLng(widget.event.latitude!, widget.event.longitude!),
-                                      isReadOnly: true,
-                                    ),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.map, color: AppColors.primary),
-                              label: const Text("Haritada Göster", style: TextStyle(color: AppColors.primary)),
-                              style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: AppColors.primary),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                            ),
-                          ),
-                        
-                        const SizedBox(height: 20),
-                        const Text("Not:", style: TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        _isEditing
-                          ? TextFormField(controller: _descController, maxLines: 4)
-                          : Text(_descController.text, style: const TextStyle(fontSize: 16, height: 1.5)),
-                        
-                        const SizedBox(height: 40),
-                        
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: _deleteEvent,
-                                icon: const Icon(Icons.delete, color: Colors.red),
-                                label: const Text("Anıyı Sil", style: TextStyle(color: Colors.red)),
+                                icon: const Icon(Icons.map, color: AppColors.primary),
+                                label: const Text("Haritada Göster", style: TextStyle(color: AppColors.primary)),
                                 style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  side: const BorderSide(color: Colors.red),
+                                  side: const BorderSide(color: AppColors.primary),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: _toggleEdit,
-                                icon: Icon(_isEditing ? Icons.save : Icons.edit, color: Colors.white),
-                                label: Text(
-                                  _isEditing ? "Kaydet" : "Düzenle",
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+
+                          if (_isEditing)
+                             Padding(
+                              padding: const EdgeInsets.only(top: 12.0),
+                              child: OutlinedButton.icon(
+                                onPressed: () async {
+                                  final LatLng? result = await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => MapPickerScreen(
+                                        initialLocation: _editedLocation ?? const LatLng(39.9334, 32.8597),
+                                      ),
+                                    ),
+                                  );
+                                  if (result != null) {
+                                    setState(() => _editedLocation = result);
+                                  }
+                                },
+                                icon: const Icon(Icons.edit_location_alt, color: AppColors.primary),
+                                label: const Text("Haritadaki Konumu Değiştir", style: TextStyle(color: AppColors.primary)),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: AppColors.primary),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 ),
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 50),
-                      ],
+                          
+                          const SizedBox(height: 20),
+                          const Text("Not:", style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          _isEditing
+                            ? TextFormField(controller: _descController, maxLines: 4)
+                            : Text(_descController.text, style: const TextStyle(fontSize: 16, height: 1.5)),
+                          
+                          const SizedBox(height: 40),
+                          
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _deleteEvent,
+                                  icon: const Icon(Icons.delete, color: Colors.red),
+                                  label: const Text("Anıyı Sil", style: TextStyle(color: Colors.red)),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    side: const BorderSide(color: Colors.red),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: _toggleEdit,
+                                  icon: Icon(_isEditing ? Icons.save : Icons.edit, color: Colors.white),
+                                  label: Text(
+                                    _isEditing ? "Kaydet" : "Düzenle",
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 50),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

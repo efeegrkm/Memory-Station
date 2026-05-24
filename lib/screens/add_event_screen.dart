@@ -1,12 +1,14 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:latlong2/latlong.dart'; // YENİ
+import 'package:latlong2/latlong.dart';
+import 'package:http/http.dart' as http;
 import '../theme/app_theme.dart';
 import '../services/database_service.dart';
-import 'map_picker_screen.dart'; // YENİ
+import 'map_picker_screen.dart';
 
 class AddEventScreen extends StatefulWidget {
   const AddEventScreen({super.key});
@@ -18,15 +20,45 @@ class AddEventScreen extends StatefulWidget {
 class _AddEventScreenState extends State<AddEventScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _titleController = TextEditingController();
+  
+  static const List<String> _countryList = [
+    'Türkiye', 'ABD', 'Almanya', 'Andorra', 'Arjantin', 'Arnavutluk', 'Avustralya', 'Avusturya', 'Azerbaycan',
+    'Bahamalar', 'Bahreyn', 'Bangladeş', 'Belçika', 'Birleşik Arap Emirlikleri', 'Birleşik Krallık', 'Bosna Hersek',
+    'Brezilya', 'Bulgaristan', 'Cezayir', 'Çekya', 'Çin', 'Danimarka', 'Dominik Cumhuriyeti', 'Ekvador', 'Endonezya',
+    'Ermenistan', 'Estonya', 'Fas', 'Fiji', 'Filipinler', 'Filistin', 'Finlandiya', 'Fransa', 'Güney Afrika',
+    'Güney Kore', 'Gürcistan', 'Hırvatistan', 'Hindistan', 'Hollanda', 'Irak', 'İngiltere', 'İran', 'İrlanda',
+    'İspanya', 'İsrail', 'İsveç', 'İsviçre', 'İtalya', 'İzlanda', 'Japonya', 'Kamboçya', 'Kamerun', 'Kanada',
+    'Karadağ', 'Katar', 'Kazakistan', 'Kıbrıs', 'Kırgızistan', 'Kolombiya', 'Kosova', 'Kosta Rika', 'Kuveyt',
+    'Kuzey Kore', 'Kuzey Makedonya', 'Küba', 'Letonya', 'Libya', 'Litvanya', 'Lübnan', 'Lüksemburg', 'Macaristan',
+    'Madagaskar', 'Malezya', 'Malta', 'Meksika', 'Mısır', 'Moğolistan', 'Moldova', 'Monako', 'Nikaragua', 'Nijerya',
+    'Norveç', 'Özbekistan', 'Pakistan', 'Panama', 'Paraguay', 'Peru', 'Polonya', 'Portekiz', 'Romanya', 'Rusya',
+    'Sırbistan', 'Singapur', 'Slovakya', 'Slovenya', 'Sri Lanka', 'Suriye', 'Suudi Arabistan', 'Şili', 'Tacikistan',
+    'Tayland', 'Tayvan', 'Tunus', 'Türkmenistan', 'Ukrayna', 'Umman', 'Uruguay', 'Ürdün', 'Venezuela', 'Vietnam',
+    'Yemen', 'Yeni Zelanda', 'Yunanistan', 'Diğer'
+  ];
+
+  static const List<String> _turkeyCities = [
+    'Adana', 'Adıyaman', 'Afyonkarahisar', 'Ağrı', 'Amasya', 'Ankara', 'Antalya', 'Artvin', 'Aydın', 'Balıkesir',
+    'Bilecik', 'Bingöl', 'Bitlis', 'Bolu', 'Burdur', 'Bursa', 'Çanakkale', 'Çankırı', 'Çorum', 'Denizli', 'Diyarbakır',
+    'Edirne', 'Elazığ', 'Erzincan', 'Erzurum', 'Eskişehir', 'Gaziantep', 'Giresun', 'Gümüşhane', 'Hakkari', 'Hatay',
+    'Isparta', 'Mersin', 'İstanbul', 'İzmir', 'Kars', 'Kastamonu', 'Kayseri', 'Kırklareli', 'Kırşehir', 'Kocaeli',
+    'Konya', 'Kütahya', 'Malatya', 'Manisa', 'Kahramanmaraş', 'Mardin', 'Muğla', 'Muş', 'Nevşehir', 'Niğde', 'Ordu',
+    'Rize', 'Sakarya', 'Samsun', 'Siirt', 'Sinop', 'Sivas', 'Tekirdağ', 'Tokat', 'Trabzon', 'Tunceli', 'Şanlıurfa',
+    'Uşak', 'Van', 'Yozgat', 'Zonguldak', 'Aksaray', 'Bayburt', 'Karaman', 'Kırıkkale', 'Batman', 'Şırnak', 'Bartın',
+    'Ardahan', 'Iğdır', 'Yalova', 'Karabük', 'Kilis', 'Osmaniye', 'Düzce'
+  ];
+
+  TextEditingController _countryController = TextEditingController();
+  TextEditingController _cityController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   
   DateTime _selectedDate = DateTime.now();
   List<XFile> _selectedImages = [];
   bool _isLoading = false;
-  LatLng? _selectedLocation; // YENİ: Koordinat değişkeni
+  bool _isSearchingLocation = false;
+  LatLng? _selectedLocation; 
   
-  // Varsayılan Kategoriler
   final List<String> _categories = ['Sinema', 'Piknik', 'Tiyatro', 'Gezi', 'Yürüyüş', 'Kutlama', 'Yemek'];
   String _selectedCategory = 'Gezi';
 
@@ -65,6 +97,67 @@ class _AddEventScreenState extends State<AddEventScreen> {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("En fazla 5 fotoğraf seçilebilir.")));
         }
       });
+    }
+  }
+
+  void _showSearchResultsDialog(List<dynamic> results) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: results.length,
+        itemBuilder: (context, index) {
+          final place = results[index];
+          final name = place['name'] ?? 'Bilinmeyen Konum';
+          final desc = place['display_name'] ?? '';
+          return ListTile(
+            leading: const Icon(Icons.location_on, color: AppColors.primary),
+            title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text(desc, maxLines: 2, overflow: TextOverflow.ellipsis),
+            onTap: () {
+              Navigator.pop(ctx);
+              setState(() {
+                _selectedLocation = LatLng(double.parse(place['lat']), double.parse(place['lon']));
+                _locationController.text = name;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Konum işaretlendi!"), backgroundColor: AppColors.primaryDark));
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _autoFindLocation() async {
+    if (_locationController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Önce bir mekan adı yazın.")));
+      return;
+    }
+    
+    setState(() => _isSearchingLocation = true);
+    
+    String query = _locationController.text;
+    if (_cityController.text.isNotEmpty) query += ", ${_cityController.text}";
+    if (_countryController.text.isNotEmpty) query += ", ${_countryController.text}";
+
+    try {
+      final url = Uri.parse('https://nominatim.openstreetmap.org/search?q=$query&format=json&limit=5&addressdetails=1');
+      final response = await http.get(url, headers: {'User-Agent': 'MemoryStationApp/1.0'});
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data.isNotEmpty) {
+          // --- ÇÖZÜM: Artık tek sonuç olsa bile otomatik atanmayacak, direkt liste açılacak. ---
+          _showSearchResultsDialog(data); 
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Bu isme ait koordinat bulunamadı.")));
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Arama başarısız.")));
+    } finally {
+      setState(() => _isSearchingLocation = false);
     }
   }
 
@@ -110,12 +203,11 @@ class _AddEventScreenState extends State<AddEventScreen> {
     try {
       Map<String, dynamic> eventData = {
         'title': _titleController.text,
-        'location': _locationController.text,
+        'location': _locationController.text, 
         'description': _descController.text,
         'date': _selectedDate,
         'category': _selectedCategory,
         'type': 'memory',
-        // YENİ: Koordinatları ekle
         'latitude': _selectedLocation?.latitude,
         'longitude': _selectedLocation?.longitude,
       };
@@ -153,7 +245,6 @@ class _AddEventScreenState extends State<AddEventScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // FOTOĞRAF ALANI
                 SizedBox(
                   height: 120,
                   child: ListView.builder(
@@ -211,10 +302,92 @@ class _AddEventScreenState extends State<AddEventScreen> {
                 
                 _buildTextField(_titleController, "Başlık", Icons.edit, isRequired: false),
                 const SizedBox(height: 12),
-                _buildTextField(_locationController, "Konum Adı", Icons.location_on, isRequired: false),
+                
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10)]),
+                        child: Autocomplete<String>(
+                          initialValue: const TextEditingValue(text: 'Türkiye'),
+                          optionsBuilder: (TextEditingValue textEditingValue) {
+                            if (textEditingValue.text.isEmpty) return _countryList;
+                            return _countryList.where((option) => option.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                          },
+                          onSelected: (String selection) {
+                            setState(() {}); 
+                          },
+                          fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                            _countryController = controller;
+                            return TextField(
+                              controller: controller,
+                              focusNode: focusNode,
+                              decoration: const InputDecoration(hintText: "Ülke", border: InputBorder.none, prefixIcon: Icon(Icons.public, size: 20)),
+                              onChanged: (v) => setState(() {}),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10)]),
+                        child: Autocomplete<String>(
+                          initialValue: const TextEditingValue(text: 'Ankara'),
+                          optionsBuilder: (TextEditingValue textEditingValue) {
+                            if (_countryController.text.toLowerCase() != 'türkiye') {
+                              return const Iterable<String>.empty();
+                            }
+                            if (textEditingValue.text.isEmpty) return _turkeyCities;
+                            return _turkeyCities.where((option) => option.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                          },
+                          fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                            _cityController = controller;
+                            return TextField(
+                              controller: controller,
+                              focusNode: focusNode,
+                              decoration: const InputDecoration(hintText: "Şehir", border: InputBorder.none, prefixIcon: Icon(Icons.location_city, size: 20)),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10)],
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _locationController,
+                          decoration: const InputDecoration(
+                            hintText: "Mekan Adı (Örn: Galata Kulesi)",
+                            prefixIcon: Icon(Icons.location_on, color: AppColors.primary),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          ),
+                        ),
+                      ),
+                      Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), shape: BoxShape.circle),
+                        child: _isSearchingLocation 
+                          ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                          : IconButton(icon: const Icon(Icons.search, color: AppColors.primary), onPressed: () { FocusScope.of(context).unfocus(); _autoFindLocation(); }),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 12),
 
-                // --- YENİ: HARİTADAN SEÇ BUTONU ---
                 InkWell(
                   onTap: () async {
                     final LatLng? result = await Navigator.push(

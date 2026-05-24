@@ -2,30 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
-  // Yeni Turkuaz & Yeşil & Pastel Tonlar
-  static const Color background = Color(0xFFF0F7F4); // Çok açık nane yeşili
+  static const Color background = Color(0xFFF0F7F4); 
   static const Color surface = Color(0xFFFFFFFF);
   
-  static const Color primary = Color(0xFF26A69A); // Turkuaz
-  static const Color primaryDark = Color(0xFF00796B); // Koyu Turkuaz
-  static const Color accent = Color(0xFFA5D6A7); // Pastel Yeşil
+  static const Color primary = Color(0xFF26A69A); 
+  static const Color primaryDark = Color(0xFF00796B); 
+  static const Color accent = Color(0xFFA5D6A7); 
   
-  static const Color textMain = Color(0xFF263238); // Koyu Gri/Mavi
+  static const Color textMain = Color(0xFF263238); 
   static const Color textLight = Color(0xFF78909C);
   
-  static const Color timelineLine = Color(0xFF80CBC4); // Çizgi rengi
-  static const Color purpleHeart = Color(0xFF9C27B0); // Timeline'daki Mor Kalp
+  static const Color timelineLine = Color(0xFF80CBC4); 
+  static const Color purpleHeart = Color(0xFF9C27B0); 
 }
 
 class AppTheme {
-  // DÜZELTME: Gradyan tanımı buraya, AppTheme sınıfının içine taşındı.
   static const BoxDecoration mainGradientDecoration = BoxDecoration(
     gradient: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [
-        Color(0xFFE0F2F1), // Açık Turkuaz
-        Color(0xFFE8F5E9), // Açık Yeşil
+        Color(0xFFE0F2F1), 
+        Color(0xFFE8F5E9), 
       ],
     ),
   );
@@ -84,4 +82,17 @@ class AppTheme {
       spreadRadius: 1,
     ),
   ];
+}
+
+// --- YENİ: Harita Türleri Katman Seçici (Madde 3) ---
+class AppMapStyles {
+  static const Map<String, String> styles = {
+    'Standart (OSM)': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    'Topoğrafik': 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    'Açık Tema (Carto)': 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+    'Koyu Tema (Carto)': 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+  };
+  
+  // Uygulama genelinde kullanılacak aktif harita stili
+  static String currentStyle = 'Standart (OSM)';
 }
